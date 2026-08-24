@@ -5,6 +5,7 @@ from marshmallow import ValidationError
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import VolunteerProfile, utcnow
+from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
 from .schemas import VolunteerSelfUpdateSchema, VolunteerStaffUpdateSchema
 
@@ -77,6 +78,12 @@ def update_volunteer(volunteer_id):
     if "status" in data and data["status"] != profile.status:
         profile.reviewed_by_id = int(get_jwt_identity())
         profile.reviewed_at = utcnow()
+        if data["status"] == "Verified":
+            notify(
+                profile.user_id, "Volunteer Verified", "You're verified!",
+                "Your volunteer application has been verified. You can now be assigned to home visits and assistance requests.",
+                related_resource_type="volunteer_profile", related_resource_id=profile.id,
+            )
 
     for field, value in data.items():
         setattr(profile, field, value)

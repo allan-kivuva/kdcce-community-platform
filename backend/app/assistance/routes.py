@@ -5,6 +5,7 @@ from marshmallow import ValidationError
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import AssistanceRequest, ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
+from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
 from .schemas import AssistanceRequestAssigneeUpdateSchema, AssistanceRequestCreateSchema, AssistanceRequestStaffUpdateSchema
 
@@ -66,6 +67,13 @@ def create_request():
     status = "Assigned" if data.get("assigned_to_id") else "Requested"
     req = AssistanceRequest(**data, status=status, requested_by_id=int(get_jwt_identity()))
     db.session.add(req)
+    db.session.flush()  # assigns req.id so the notification can reference it
+    if req.assigned_to_id:
+        notify(
+            req.assigned_to_id, "Assistance Request Assignment", "Assistance request assigned to you",
+            f"You have been assigned a {req.request_type} request for {req.elderly_member.full_name}.",
+            related_resource_type="assistance_request", related_resource_id=req.id,
+        )
     db.session.commit()
     return jsonify(request=req.to_dict()), 201
 
@@ -147,8 +155,17 @@ def update_request(request_id):
     if data.get("status") == "Completed" and req.completed_at is None:
         data["completed_at"] = utcnow()
 
+    previous_assignee = req.assigned_to_id
     for field, value in data.items():
         setattr(req, field, value)
+
+    if req.assigned_to_id and req.assigned_to_id != previous_assignee:
+        notify(
+            req.assigned_to_id, "Assistance Request Assignment", "Assistance request assigned to you",
+            f"You have been assigned a {req.request_type} request for {req.elderly_member.full_name}.",
+            related_resource_type="assistance_request", related_resource_id=req.id,
+        )
+
     db.session.commit()
     return jsonify(request=req.to_dict()), 200
 

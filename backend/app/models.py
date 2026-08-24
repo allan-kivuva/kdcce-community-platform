@@ -896,6 +896,60 @@ class Incident(db.Model):
         }
 
 
+NOTIFICATION_TYPES = (
+    "Medication Reminder", "Health Follow-up", "Home Visit Assignment", "Home Visit Reminder",
+    "Assistance Request Assignment", "Low Inventory Alert", "Upcoming Activity",
+    "Incident Follow-up", "Volunteer Verified", "System Notification",
+)
+
+
+class Notification(db.Model):
+    """One row per (event, recipient) — not a separate NotificationRecipient
+    join table. Every type here is inherently single-recipient in this
+    system (an assignment, a personal alert); a rare broadcast (e.g. low
+    stock to every admin) just costs a handful of duplicate rows, which is
+    cheap at this system's scale and far simpler than a fan-out join table
+    this system's actual usage never needs.
+
+    related_resource_id is deliberately NOT a real foreign key: it's a
+    polymorphic pointer (a notification can reference a home visit, an
+    assistance request, an inventory item, ...) and a single SQL FK can
+    only target one table. The alternative — one nullable FK column per
+    possible target — is worse bloat for a field whose only job is "let
+    the user navigate to what this is about." If the target is later
+    deleted the notification becomes a dead link, a minor UX gap, not a
+    data-integrity problem like every other FK in this system."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (db.Index("ix_notifications_recipient_read", "recipient_id", "is_read"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    notification_type = db.Column(db.String(40), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    related_resource_type = db.Column(db.String(30), nullable=True)
+    related_resource_id = db.Column(db.Integer, nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+    recipient = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "notification_type": self.notification_type,
+            "title": self.title,
+            "message": self.message,
+            "related_resource_type": self.related_resource_type,
+            "related_resource_id": self.related_resource_id,
+            "is_read": self.is_read,
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

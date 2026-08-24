@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ..auth.decorators import roles_required
 from ..extensions import db
-from ..models import Donation, InventoryItem, StockMovement
+from ..models import Donation, InventoryItem, StockMovement, User
+from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
 from .schemas import InventoryItemSchema, StockMovementSchema
 
@@ -109,6 +110,8 @@ def create_movement(item_id):
     if data["movement_type"] == "Out" and data["quantity"] > item.current_stock:
         return jsonify(error=f"Insufficient stock: {item.current_stock} {item.unit} available, {data['quantity']} requested"), 400
 
+    was_low_stock = item.current_stock <= item.minimum_stock
+
     movement = StockMovement(
         item_id=item.id,
         movement_type=data["movement_type"],
@@ -119,6 +122,17 @@ def create_movement(item_id):
         recorded_by_id=int(get_jwt_identity()),
     )
     item.current_stock = item.current_stock + data["quantity"] if data["movement_type"] == "In" else item.current_stock - data["quantity"]
+
+    # Only alert on the transition into low stock, not on every subsequent
+    # movement while it stays low — otherwise every further stock-out
+    # would spam a fresh alert to every admin/staff for the same item.
+    if not was_low_stock and item.current_stock <= item.minimum_stock:
+        for staff_member in User.query.filter(User.role.in_(("admin", "staff"))).all():
+            notify(
+                staff_member.id, "Low Inventory Alert", f"Low stock: {item.name}",
+                f"{item.name} is at {item.current_stock} {item.unit}, at or below the minimum of {item.minimum_stock} {item.unit}.",
+                related_resource_type="inventory_item", related_resource_id=item.id,
+            )
 
     db.session.add(movement)
     try:

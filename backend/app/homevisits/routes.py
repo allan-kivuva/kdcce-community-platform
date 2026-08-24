@@ -5,6 +5,7 @@ from marshmallow import ValidationError
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
+from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
 from .schemas import HomeVisitAssigneeUpdateSchema, HomeVisitCreateSchema, HomeVisitStaffUpdateSchema
 
@@ -75,6 +76,13 @@ def create_visit():
     status = "Assigned" if data.get("assigned_to_id") else "Pending"
     visit = HomeVisit(**data, status=status, requested_by_id=int(get_jwt_identity()))
     db.session.add(visit)
+    db.session.flush()  # assigns visit.id so the notification can reference it
+    if visit.assigned_to_id:
+        notify(
+            visit.assigned_to_id, "Home Visit Assignment", "Home visit assigned to you",
+            f"You have been assigned a home visit for {visit.elderly_member.full_name}.",
+            related_resource_type="home_visit", related_resource_id=visit.id,
+        )
     db.session.commit()
     return jsonify(visit=visit.to_dict()), 201
 
@@ -149,8 +157,17 @@ def update_visit(visit_id):
     if data.get("status") == "Completed" and visit.completed_at is None:
         data["completed_at"] = utcnow()
 
+    previous_assignee = visit.assigned_to_id
     for field, value in data.items():
         setattr(visit, field, value)
+
+    if visit.assigned_to_id and visit.assigned_to_id != previous_assignee:
+        notify(
+            visit.assigned_to_id, "Home Visit Assignment", "Home visit assigned to you",
+            f"You have been assigned a home visit for {visit.elderly_member.full_name}.",
+            related_resource_type="home_visit", related_resource_id=visit.id,
+        )
+
     db.session.commit()
     return jsonify(visit=visit.to_dict()), 200
 
