@@ -93,7 +93,7 @@ export default function Donate() {
   const PaymentIcon = paymentMethods.find(m => m.value === (receipt?.paymentMethod))?.icon || Smartphone
 
   return <>
-    <div className="print:hidden"><PageHero title="Make a difference today" eyebrow="Support / Donate" text="This is the UI for the course project's sandbox donation flow. No real payments are processed here yet." /></div>
+    <div className="print:hidden"><PageHero title="Make a difference today" eyebrow="Support / Donate" text="This is the UI for the course project's sandbox donation flow. No real payments are processed here yet." image="/images/mary.jpg" /></div>
     <section className="container-k grid gap-10 py-20 lg:grid-cols-[1fr_420px] print:block print:py-6">
       {receipt ? <div>
         <div className="text-center print:hidden"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-kOrange text-white"><Check /></div><h2 className="mt-6 font-display text-3xl font-bold text-kGreen">Thank you for your support.</h2><p className="mx-auto mt-3 max-w-md leading-7 text-kMuted">A donation receipt has been generated below. In the live version this will also be emailed to you automatically.</p></div>

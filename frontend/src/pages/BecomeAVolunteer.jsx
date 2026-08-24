@@ -63,7 +63,7 @@ export default function BecomeAVolunteer() {
   }
 
   if (submitted) {
-    return <><PageHero title="Application submitted" eyebrow="Become a volunteer" text="Thank you for applying to volunteer with KDCCE." />
+    return <><PageHero title="Application submitted" eyebrow="Become a volunteer" text="Thank you for applying to volunteer with KDCCE." image="/images/healthcare.jpg" />
       <section className="container-k py-20"><div className="mx-auto max-w-xl card-k p-10 text-center">
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-kTint text-kOrange"><Clock /></div>
         <h2 className="mt-5 font-display text-3xl font-bold text-kGreen">Your application is under review</h2>
@@ -74,7 +74,7 @@ export default function BecomeAVolunteer() {
   }
 
   return <>
-    <PageHero title="Become a Volunteer" eyebrow="Get involved" text="Tell us about yourself and how you'd like to help. Our team reviews every application before granting portal access." />
+    <PageHero title="Become a Volunteer" eyebrow="Get involved" text="Tell us about yourself and how you'd like to help. Our team reviews every application before granting portal access." image="/images/healthcare.jpg" />
     <section className="container-k grid gap-10 py-20 md:grid-cols-[.7fr_1.3fr]">
       <div className="rounded-2xl bg-kGreen p-8 text-white">
         <div className="grid h-14 w-14 place-items-center rounded-2xl bg-kOrange"><HeartHandshake /></div>

@@ -10,7 +10,7 @@ function formatDate(iso) {
 
 export default function Blog(){
   const { items: posts, loading, error } = useApiList('/api/blog', 'posts')
-  return <><PageHero title="News & stories" eyebrow="Blog" text="Stories that show the people, ideas and small wins behind the work."/><section className="container-k py-20">
+  return <><PageHero title="News & stories" eyebrow="Blog" text="Stories that show the people, ideas and small wins behind the work." image="/images/blog.jpg"/><section className="container-k py-20">
     {loading && <p className="text-kMuted">Loading stories…</p>}
     {error && <p className="text-kOrange">{error}</p>}
     {!loading && !error && posts.length === 0 && <p className="text-kMuted">No stories published yet — check back soon.</p>}

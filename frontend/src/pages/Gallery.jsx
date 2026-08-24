@@ -6,7 +6,7 @@ import { useApiList } from '../lib/useApiList'
 export default function Gallery(){
   const [selected,setSelected]=useState(null)
   const { items: images, loading, error } = useApiList('/api/gallery', 'images')
-  return <><PageHero title="Moments from the community" eyebrow="Gallery" text="A visual preview of meals, conversations, learning and shared moments."/><section className="container-k py-20">
+  return <><PageHero title="Moments from the community" eyebrow="Gallery" text="A visual preview of meals, conversations, learning and shared moments." image="/images/community-market.jpg"/><section className="container-k py-20">
     {loading && <p className="text-kMuted">Loading gallery…</p>}
     {error && <p className="text-kOrange">{error}</p>}
     {!loading && !error && images.length === 0 && <p className="text-kMuted">No photos yet — check back soon.</p>}

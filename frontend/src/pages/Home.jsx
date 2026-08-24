@@ -5,6 +5,7 @@ import { programs } from '../data/siteData'
 import ProgramCard from '../components/ProgramCard'
 import Stats from '../components/Stats'
 import GalleryPreview from '../components/GalleryPreview'
+import VideoShowcase from '../components/VideoShowcase'
 import CtaBanner from '../components/CtaBanner'
 import { useApiList } from '../lib/useApiList'
 
@@ -19,7 +20,9 @@ export default function Home() {
       </div>
     </section>
 
-    <section className="container-k -mt-10 relative z-10 grid gap-4 md:grid-cols-3">
+    <VideoShowcase />
+
+    <section className="container-k grid gap-4 md:grid-cols-3">
       {programs.slice(0,3).map(p => <ProgramCard key={p.title} program={p} />)}
     </section>
     <Stats />
