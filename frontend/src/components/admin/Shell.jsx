@@ -1,5 +1,5 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { Activity, BookOpen, Boxes, CalendarClock, ClipboardCheck, FileBarChart, FileImage, HandHeart, Heart, HeartPulse, HeartHandshake, Home, Inbox, LayoutDashboard, LogOut, Package, Pill, ShieldAlert, User, UserRound, Users, Utensils } from 'lucide-react'
+import { Activity, BookOpen, Boxes, CalendarClock, ClipboardCheck, FileBarChart, FileImage, Gauge, HandHeart, Heart, HeartPulse, HeartHandshake, Home, Inbox, LayoutDashboard, LogOut, Package, Pill, ShieldAlert, User, UserRound, Users, Utensils } from 'lucide-react'
 import ThemeToggle from '../../theme/ThemeToggle'
 import { getStoredUser, clearSession } from '../../lib/api'
 
@@ -12,6 +12,7 @@ import { getStoredUser, clearSession } from '../../lib/api'
 // from staring at a nav full of links that don't work for them.
 const staffMenu = [
   ['Overview', '/admin', 'LayoutDashboard'],
+  ['Analytics', '/admin/analytics', 'Gauge'],
   ['Elderly Members', '/admin/elderly', 'UserRound'],
   ['Attendance', '/admin/attendance', 'ClipboardCheck'],
   ['Health & Wellness', '/admin/health', 'HeartPulse'],
@@ -36,7 +37,7 @@ const volunteerMenu = [
   ['My Assignments', '/admin/assignments', 'CalendarClock'],
   ['My Assistance Requests', '/admin/my-assistance', 'HandHeart'],
 ]
-const icons = { LayoutDashboard, Heart, HeartPulse, HeartHandshake, Home, Pill, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck, User, CalendarClock, Utensils, Boxes, Activity, HandHeart, ShieldAlert, FileBarChart }
+const icons = { LayoutDashboard, Heart, HeartPulse, HeartHandshake, Home, Pill, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck, User, CalendarClock, Utensils, Boxes, Activity, HandHeart, ShieldAlert, FileBarChart, Gauge }
 
 export default function Shell({ children }) {
   const navigate = useNavigate()

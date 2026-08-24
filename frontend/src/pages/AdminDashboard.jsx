@@ -22,6 +22,7 @@ import AssistanceManager from './admin/AssistanceManager'
 import MyAssistanceRequests from './admin/MyAssistanceRequests'
 import IncidentManager from './admin/IncidentManager'
 import ReportsManager from './admin/ReportsManager'
+import AnalyticsManager from './admin/AnalyticsManager'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -277,6 +278,7 @@ export default function AdminDashboard() {
       <Route path="my-assistance" element={<MyAssistanceRequests showToast={showToast} />} />
       <Route path="incidents" element={<IncidentManager showToast={showToast} />} />
       <Route path="reports" element={<ReportsManager showToast={showToast} />} />
+      <Route path="analytics" element={<AnalyticsManager />} />
       <Route path="blog" element={<BlogManager
         posts={blogApi.items} loading={blogApi.loading} error={blogApi.error} reload={blogApi.reload}
         addPost={blogApi.create} patchPost={blogApi.patch} deletePost={blogApi.remove} showToast={showToast} />} />
