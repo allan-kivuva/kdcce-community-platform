@@ -39,6 +39,7 @@ def create_app(config_object=Config):
     from .reports.routes import bp as reports_bp
     from .analytics.routes import bp as analytics_bp
     from .notifications.routes import bp as notifications_bp
+    from .inbox.routes import bp as inbox_bp, admin_bp as admin_inbox_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
@@ -61,6 +62,8 @@ def create_app(config_object=Config):
     app.register_blueprint(reports_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(inbox_bp)
+    app.register_blueprint(admin_inbox_bp)
 
     from .cli import seed_admin
     app.cli.add_command(seed_admin)

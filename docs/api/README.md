@@ -50,9 +50,10 @@ A `204 No Content` response (deletes) has no body.
 | Reports | [reports.md](reports.md) | Implemented |
 | Analytics | [analytics.md](analytics.md) | Implemented |
 | Notifications | [notifications.md](notifications.md) | Implemented |
+| Inbox | [inbox.md](inbox.md) | Implemented |
 | Donations | [donations.md](donations.md) | Implemented |
 | Blog | [blog.md](blog.md) | Implemented |
 | Gallery | [gallery.md](gallery.md) | Implemented |
 | Crafts | [crafts.md](crafts.md) | Implemented |
 | Team | [team.md](team.md) | Implemented |
-| Real inbox, clinic/medical visits | — | Not built yet — add a doc file here as each module lands |
+| Clinic/medical visits | — | Not built yet — add a doc file here as each module lands |

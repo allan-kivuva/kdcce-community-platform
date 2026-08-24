@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Routes, Route, Link } from 'react-router-dom'
-import { BarChart3, Search, Plus, Trash2, Pencil, ChevronDown, Mail, MailOpen, Reply, Settings } from 'lucide-react'
+import { BarChart3, Search, Plus, Trash2, Pencil, ChevronDown, Settings } from 'lucide-react'
 import Modal from '../components/admin/Modal'
 import Toast from '../components/admin/Toast'
 import Shell from '../components/admin/Shell'
@@ -23,13 +23,7 @@ import MyAssistanceRequests from './admin/MyAssistanceRequests'
 import IncidentManager from './admin/IncidentManager'
 import ReportsManager from './admin/ReportsManager'
 import AnalyticsManager from './admin/AnalyticsManager'
-
-// Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
-const initialInbox = [
-  { id: 1, name: 'Grace M.', email: 'grace@example.com', subject: 'Volunteering interest', message: 'Hi, I would love to volunteer on weekends. What is the best way to get started?', date: '2026-08-19', read: false },
-  { id: 2, name: 'Daniel K.', email: 'daniel@example.com', subject: 'Partnership proposal', message: 'Our company would like to explore a partnership for the feeding program.', date: '2026-08-17', read: true },
-  { id: 3, name: 'Faith W.', email: 'faith@example.com', subject: 'Thank you', message: 'Thank you for the wonderful work you do for our elders in Kibera.', date: '2026-08-15', read: true }
-]
+import InboxManager from './admin/InboxManager'
 
 function QuickActionMenu() {
   const [open, setOpen] = useState(false)
@@ -213,30 +207,6 @@ function CraftsManager({ crafts, loading, error, reload, addCraft, patchCraft, d
   </Shell>
 }
 
-function InboxManager({ messages, setMessages, showToast }) {
-  const [openId, setOpenId] = useState(null)
-  function toggleRead(m) { setMessages(ms => ms.map(x => x.id === m.id ? { ...x, read: !x.read } : x)); showToast(m.read ? 'Marked as unread' : 'Marked as read') }
-  function remove(m) { if (window.confirm(`Delete message from ${m.name}?`)) { setMessages(ms => ms.filter(x => x.id !== m.id)); showToast('Message deleted') } }
-  const unread = messages.filter(m => !m.read).length
-
-  return <Shell>
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><div className="eyebrow">Manage</div><h1 className="font-display text-3xl font-bold text-kGreen">Inbox</h1></div><div className="rounded-full bg-kTint px-4 py-2 text-sm font-bold text-kOrange">{unread} unread</div></div>
-    <div className="card-k mt-7 divide-y divide-kBorderSoft">
-      {messages.map(m => <div key={m.id} className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button onClick={() => setOpenId(id => id === m.id ? null : m.id)} className="flex flex-1 items-center gap-3 text-left">
-            {m.read ? <MailOpen size={18} className="text-kMuted" /> : <Mail size={18} className="text-kOrange" />}
-            <div><div className={`text-sm ${m.read ? 'font-semibold text-kInk' : 'font-bold text-kGreen'}`}>{m.name} &middot; {m.subject}</div><div className="text-xs text-kMuted">{m.email} &middot; {m.date}</div></div>
-          </button>
-          <div className="flex gap-3 text-xs font-semibold"><button onClick={() => toggleRead(m)} className="text-kOrange">{m.read ? 'Mark unread' : 'Mark read'}</button><button onClick={() => remove(m)} className="text-kMuted hover:text-red-600"><Trash2 size={16} /></button></div>
-        </div>
-        {openId === m.id && <div className="mt-4 rounded-xl bg-kCream p-4 text-sm leading-6 text-kInk">{m.message}<div className="mt-3"><a href={`mailto:${m.email}`} className="inline-flex items-center gap-2 text-sm font-semibold text-kOrange"><Reply size={14} /> Reply by email</a></div></div>}
-      </div>)}
-      {messages.length === 0 && <p className="p-5 text-sm text-kMuted">No messages.</p>}
-    </div>
-  </Shell>
-}
-
 function SettingsPage({ showToast }) {
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [weeklyDigest, setWeeklyDigest] = useState(false)
@@ -256,7 +226,6 @@ export default function AdminDashboard() {
   const galleryApi = useApiResource('/api/gallery', { listKey: 'images', itemKey: 'image' })
   const teamApi = useApiResource('/api/team', { listKey: 'team', itemKey: 'member' })
   const craftsApi = useApiResource('/api/crafts', { listKey: 'crafts', itemKey: 'craft' })
-  const [inbox, setInbox] = useState(initialInbox)
   const [toast, showToast] = useToast()
 
   return <>
@@ -299,7 +268,7 @@ export default function AdminDashboard() {
         patchCraft={(id, body) => craftsApi.patch(id, body, '/api/admin/crafts')}
         deleteCraft={id => craftsApi.remove(id, '/api/admin/crafts')}
         showToast={showToast} />} />
-      <Route path="inbox" element={<InboxManager messages={inbox} setMessages={setInbox} showToast={showToast} />} />
+      <Route path="inbox" element={<InboxManager showToast={showToast} />} />
       <Route path="settings" element={<SettingsPage showToast={showToast} />} />
     </Routes>
     <Toast message={toast} />
