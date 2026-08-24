@@ -2,9 +2,10 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
-from ..assignments.schemas import AssignmentMessageCreateSchema, AssignmentReviewCreateSchema
+from ..assignments.schemas import AssignmentMessageCreateSchema, AssignmentReviewCreateSchema, ChecklistItemUpdateSchema
 from ..assignments.service import (
-    AttachmentError, attachment_file_path, get_attachment, get_review, list_messages, save_photo, send_message, submit_review,
+    AttachmentError, ChecklistError, attachment_file_path, get_attachment, get_checklist, get_review, list_messages,
+    save_photo, send_message, set_checklist_item, submit_review,
 )
 from ..auth.decorators import roles_required
 from ..extensions import db
@@ -21,6 +22,7 @@ staff_update_schema = HomeVisitStaffUpdateSchema()
 assignee_update_schema = HomeVisitAssigneeUpdateSchema()
 message_schema = AssignmentMessageCreateSchema()
 review_schema = AssignmentReviewCreateSchema()
+checklist_schema = ChecklistItemUpdateSchema()
 
 
 def _member_or_400(member_id):
@@ -185,6 +187,8 @@ def update_visit(visit_id):
     else:
         return jsonify(error="Forbidden"), 403
 
+    if data.get("status") == "Started" and visit.started_at is None:
+        data["started_at"] = utcnow()
     if data.get("status") == "Completed" and visit.completed_at is None:
         data["completed_at"] = utcnow()
 
@@ -327,6 +331,41 @@ def get_visit_review(visit_id):
     if review is None:
         return jsonify(error="No review for this visit"), 404
     return jsonify(review=review.to_dict()), 200
+
+
+@bp.get("/<int:visit_id>/checklist")
+@jwt_required()
+def get_visit_checklist(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+    return jsonify(checklist=get_checklist("home_visit", visit.id)), 200
+
+
+@bp.patch("/<int:visit_id>/checklist")
+@jwt_required()
+def update_visit_checklist(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = checklist_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    try:
+        set_checklist_item("home_visit", visit.id, data["item_key"], data["checked"], identity)
+    except ChecklistError as err:
+        return jsonify(error="Validation failed", details={"item_key": [err.message]}), 400
+
+    db.session.commit()
+    return jsonify(checklist=get_checklist("home_visit", visit.id)), 200
 
 
 @bp.delete("/<int:visit_id>")

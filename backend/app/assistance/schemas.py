@@ -6,7 +6,7 @@ from ..models import ASSISTANCE_PRIORITIES, ASSISTANCE_STATUSES, ASSISTANCE_TYPE
 # "Accepted" is deliberately excluded — that's POST .../accept, a separate,
 # narrower action (see routes.py) — and "Requested"/"Matching"/"Assigned"
 # are staff-only states the assignee has no business setting.
-ASSIGNEE_SETTABLE_STATUSES = ("In Progress", "Completed", "Cancelled")
+ASSIGNEE_SETTABLE_STATUSES = ("Started", "In Progress", "Completed", "Cancelled")
 
 
 class AssistanceRequestCreateSchema(Schema):

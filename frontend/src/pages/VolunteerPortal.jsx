@@ -8,8 +8,14 @@ import VolunteerDashboard from './volunteer/VolunteerDashboard'
 import MyVolunteerProfile from './volunteer/MyVolunteerProfile'
 import MyAssignments from './volunteer/MyAssignments'
 import MyAssistanceRequests from './volunteer/MyAssistanceRequests'
+import MyElderlyMembers from './volunteer/MyElderlyMembers'
+import MyActivity from './volunteer/MyActivity'
+import MyPerformance from './volunteer/MyPerformance'
+import VolunteerMessages from './volunteer/VolunteerMessages'
+import ReportConcern from './volunteer/ReportConcern'
 import VolunteerNotifications from './volunteer/VolunteerNotifications'
 import Toast from '../components/admin/Toast'
+import { VolunteerDataProvider } from '../lib/VolunteerDataContext'
 
 function StatusScreen({ icon, title, children, onSignOut }) {
   return <div className="grid min-h-[80vh] place-items-center bg-kCream px-5"><div className="w-full max-w-md text-center">
@@ -71,14 +77,19 @@ export default function VolunteerPortal() {
     </StatusScreen>
   }
 
-  return <>
+  return <VolunteerDataProvider>
     <Routes>
-      <Route index element={<VolunteerDashboard />} />
+      <Route index element={<VolunteerDashboard profile={profile} />} />
       <Route path="profile" element={<MyVolunteerProfile showToast={showToast} />} />
       <Route path="home-visits" element={<MyAssignments showToast={showToast} />} />
       <Route path="assistance" element={<MyAssistanceRequests showToast={showToast} />} />
+      <Route path="elderly-members" element={<MyElderlyMembers />} />
+      <Route path="activity" element={<MyActivity />} />
+      <Route path="performance" element={<MyPerformance />} />
+      <Route path="messages" element={<VolunteerMessages />} />
+      <Route path="report-concern" element={<ReportConcern showToast={showToast} />} />
       <Route path="notifications" element={<VolunteerNotifications />} />
     </Routes>
     <Toast message={toast} />
-  </>
+  </VolunteerDataProvider>
 }

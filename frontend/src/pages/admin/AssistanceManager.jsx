@@ -11,7 +11,7 @@ import { apiFetch } from '../../lib/api'
 
 const TYPES = ['Hospital Accompaniment', 'Transportation', 'Food Assistance', 'Companionship', 'Home Support', 'Other']
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
-const STATUSES = ['Requested', 'Matching', 'Assigned', 'Accepted', 'In Progress', 'Completed', 'Cancelled']
+const STATUSES = ['Requested', 'Matching', 'Assigned', 'Accepted', 'Started', 'In Progress', 'Completed', 'Cancelled']
 const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
 
 function NewRequestModal({ assignees, onClose, onCreated, showToast }) {

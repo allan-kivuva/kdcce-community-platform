@@ -493,7 +493,12 @@ class VolunteerProfile(db.Model):
 
 
 HOME_VISIT_PRIORITIES = ("Low", "Medium", "High", "Urgent")
-HOME_VISIT_STATUSES = ("Pending", "Assigned", "Scheduled", "In Progress", "Completed", "Cancelled")
+# "Accepted"/"Started" added to give the volunteer field-work flow
+# (Assigned -> Accepted -> Started -> In Progress -> Completed) the same
+# vocabulary AssistanceRequest already partly had — extending the existing
+# set, not a parallel status system. No strict state machine still applies:
+# admin/staff can set any status directly, same as every other module.
+HOME_VISIT_STATUSES = ("Pending", "Assigned", "Accepted", "Scheduled", "Started", "In Progress", "Completed", "Cancelled")
 
 
 class HomeVisit(db.Model):
@@ -518,6 +523,9 @@ class HomeVisit(db.Model):
     status = db.Column(db.String(20), nullable=False, default="Pending")
     reason = db.Column(db.Text, nullable=False)
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Server-set the instant status first becomes "Started" (see routes.py) —
+    # never accepted from the client, same principle as completed_at.
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     observations = db.Column(db.Text, nullable=True)
     support_provided = db.Column(db.Text, nullable=True)
@@ -543,6 +551,7 @@ class HomeVisit(db.Model):
             "status": self.status,
             "reason": self.reason,
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "observations": self.observations,
             "support_provided": self.support_provided,
@@ -787,7 +796,9 @@ class ActivityParticipant(db.Model):
 
 ASSISTANCE_TYPES = ("Hospital Accompaniment", "Transportation", "Food Assistance", "Companionship", "Home Support", "Other")
 ASSISTANCE_PRIORITIES = ("Low", "Medium", "High", "Urgent")
-ASSISTANCE_STATUSES = ("Requested", "Matching", "Assigned", "Accepted", "In Progress", "Completed", "Cancelled")
+# "Started" added between Accepted and In Progress — same field-work
+# lifecycle extension as HOME_VISIT_STATUSES above.
+ASSISTANCE_STATUSES = ("Requested", "Matching", "Assigned", "Accepted", "Started", "In Progress", "Completed", "Cancelled")
 
 
 class AssistanceRequest(db.Model):
@@ -817,6 +828,9 @@ class AssistanceRequest(db.Model):
     status = db.Column(db.String(20), nullable=False, default="Requested")
     description = db.Column(db.Text, nullable=False)
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Server-set the instant status first becomes "Started" — never
+    # accepted from the client, same principle as completed_at.
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     outcome_notes = db.Column(db.Text, nullable=True)
     follow_up_required = db.Column(db.Boolean, default=False, nullable=False)
@@ -844,6 +858,7 @@ class AssistanceRequest(db.Model):
             "status": self.status,
             "description": self.description,
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "outcome_notes": self.outcome_notes,
             "follow_up_required": self.follow_up_required,
@@ -853,7 +868,12 @@ class AssistanceRequest(db.Model):
         }
 
 
-INCIDENT_TYPES = ("Fall", "Injury", "Medical Concern", "Accident", "Safeguarding Concern", "Other")
+INCIDENT_TYPES = (
+    "Fall", "Injury", "Medical Concern", "Accident", "Safeguarding Concern", "Other",
+    # Added for volunteer-submitted concern reports (see routes.py) — extends
+    # the existing set rather than a parallel category list.
+    "Safety Concern", "Welfare Concern", "Emergency", "Missing Person",
+)
 INCIDENT_STATUSES = ("Open", "Under Review", "Resolved", "Closed")
 INCIDENT_SEVERITIES = ("Low", "Medium", "High", "Critical")
 
@@ -875,7 +895,10 @@ class Incident(db.Model):
     __tablename__ = "incidents"
 
     id = db.Column(db.Integer, primary_key=True)
-    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    # Nullable: a volunteer's "Report a Concern" (see incidents/routes.py)
+    # may not be about a specific member — admin/staff incident reports
+    # still always name one (enforced in IncidentSchema, not here).
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=True, index=True)
     reported_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     incident_type = db.Column(db.String(30), nullable=False)
     severity = db.Column(db.String(10), nullable=False, default="Medium")
@@ -899,8 +922,8 @@ class Incident(db.Model):
         return {
             "id": self.id,
             "elderly_member_id": self.elderly_member_id,
-            "elderly_member_name": self.elderly_member.full_name,
-            "elderly_member_code": self.elderly_member.member_id,
+            "elderly_member_name": self.elderly_member.full_name if self.elderly_member else None,
+            "elderly_member_code": self.elderly_member.member_id if self.elderly_member else None,
             "reported_by": self.reported_by.name,
             "incident_type": self.incident_type,
             "severity": self.severity,
@@ -1175,6 +1198,42 @@ class AssignmentReview(db.Model):
             "reviewed_by": self.reviewed_by.name,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class AssignmentChecklistItem(db.Model):
+    """One row per checked/unchecked item on a HomeVisit or
+    AssistanceRequest's fixed, type-specific checklist (see
+    assignments/service.py's CHECKLIST_DEFINITIONS — the item set itself is
+    defined in code, not user-editable, so there's nothing to store beyond
+    which fixed items are checked). Same polymorphic assignment_type/
+    assignment_id pointer as AssignmentAttachment/Message/Review, for the
+    same reason (one FK can't target two tables). A row only exists once an
+    item has been toggled at least once — GET synthesizes the full,
+    unchecked-by-default list by merging these rows over
+    CHECKLIST_DEFINITIONS, so there's no need to pre-create rows for every
+    item on every assignment up front."""
+
+    __tablename__ = "assignment_checklist_items"
+    __table_args__ = (db.UniqueConstraint("assignment_type", "assignment_id", "item_key", name="uq_assignment_checklist_item"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_type = db.Column(db.String(20), nullable=False)
+    assignment_id = db.Column(db.Integer, nullable=False)
+    item_key = db.Column(db.String(40), nullable=False)
+    checked = db.Column(db.Boolean, default=False, nullable=False)
+    checked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    checked_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    checked_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "item_key": self.item_key,
+            "checked": self.checked,
+            "checked_at": self.checked_at.isoformat() if self.checked_at else None,
+            "checked_by": self.checked_by.name if self.checked_by else None,
         }
 
 

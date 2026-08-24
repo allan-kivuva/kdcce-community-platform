@@ -1,5 +1,5 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, User, Home, HandHeart, Bell } from 'lucide-react'
+import { LayoutDashboard, User, Home, HandHeart, Bell, Users, History, TrendingUp, MessageSquare, AlertTriangle } from 'lucide-react'
 import ThemeToggle from '../../theme/ThemeToggle'
 import NotificationBell from '../admin/NotificationBell'
 import { getStoredUser, endSession } from '../../lib/api'
@@ -8,15 +8,21 @@ import { getStoredUser, endSession } from '../../lib/api'
 // volunteer portal is its own workspace (its own nav, its own route
 // space at /volunteer/*), not a role-switched view inside the staff
 // admin dashboard — see VolunteerPortal.jsx for the approval gate that
-// decides whether a volunteer ever reaches this shell at all.
+// decides whether a volunteer ever reaches this shell at all. Only
+// volunteer-relevant nav here — never the admin/staff management menu.
 const menu = [
   ['Dashboard', '/volunteer', 'LayoutDashboard'],
-  ['My Profile', '/volunteer/profile', 'User'],
   ['My Home Visits', '/volunteer/home-visits', 'Home'],
   ['Assistance Requests', '/volunteer/assistance', 'HandHeart'],
+  ['My Elderly Members', '/volunteer/elderly-members', 'Users'],
+  ['My Activity', '/volunteer/activity', 'History'],
+  ['My Performance', '/volunteer/performance', 'TrendingUp'],
+  ['Messages', '/volunteer/messages', 'MessageSquare'],
+  ['Report a Concern', '/volunteer/report-concern', 'AlertTriangle'],
   ['Notifications', '/volunteer/notifications', 'Bell'],
+  ['My Profile', '/volunteer/profile', 'User'],
 ]
-const icons = { LayoutDashboard, User, Home, HandHeart, Bell }
+const icons = { LayoutDashboard, User, Home, HandHeart, Bell, Users, History, TrendingUp, MessageSquare, AlertTriangle }
 
 export default function VolunteerShell({ children }) {
   const navigate = useNavigate()

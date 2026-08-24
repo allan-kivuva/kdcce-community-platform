@@ -181,6 +181,8 @@ def update_request(request_id):
     else:
         return jsonify(error="Forbidden"), 403
 
+    if data.get("status") == "Started" and req.started_at is None:
+        data["started_at"] = utcnow()
     if data.get("status") == "Completed" and req.completed_at is None:
         data["completed_at"] = utcnow()
 

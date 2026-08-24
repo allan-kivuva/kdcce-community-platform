@@ -10,7 +10,7 @@ import { useApiResource } from '../../lib/useApiResource'
 import { apiFetch } from '../../lib/api'
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
-const STATUSES = ['Pending', 'Assigned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled']
+const STATUSES = ['Pending', 'Assigned', 'Accepted', 'Scheduled', 'Started', 'In Progress', 'Completed', 'Cancelled']
 const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
 
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—' }

@@ -37,6 +37,9 @@ export default function MyVolunteerProfile({ showToast }) {
       phone: f.get('phone') || null,
       skills: f.get('skills') || null,
       availability: f.get('availability') || null,
+      areas_of_interest: f.get('areas_of_interest') || null,
+      experience: f.get('experience') || null,
+      motivation: f.get('motivation') || null,
       bio: f.get('bio') || null,
     }
     setSaving(true)
@@ -62,6 +65,9 @@ export default function MyVolunteerProfile({ showToast }) {
         <label className="text-sm font-semibold">Phone<input name="phone" defaultValue={profile.phone || ''} className="input-k mt-2" /></label>
         <label className="text-sm font-semibold">Skills<textarea name="skills" defaultValue={profile.skills || ''} rows={2} className="input-k mt-2" placeholder="e.g. First aid, cooking, transport" /></label>
         <label className="text-sm font-semibold">Availability<textarea name="availability" defaultValue={profile.availability || ''} rows={2} className="input-k mt-2" placeholder="e.g. Weekday mornings" /></label>
+        <label className="text-sm font-semibold">Areas of interest<textarea name="areas_of_interest" defaultValue={profile.areas_of_interest || ''} rows={2} className="input-k mt-2" placeholder="e.g. Elderly care, home visits, companionship" /></label>
+        <label className="text-sm font-semibold">Experience<textarea name="experience" defaultValue={profile.experience || ''} rows={2} className="input-k mt-2" /></label>
+        <label className="text-sm font-semibold">Motivation<textarea name="motivation" defaultValue={profile.motivation || ''} rows={2} className="input-k mt-2" placeholder="Why you want to volunteer with KDCCE" /></label>
         <label className="text-sm font-semibold">About you<textarea name="bio" defaultValue={profile.bio || ''} rows={3} className="input-k mt-2" /></label>
         <button disabled={saving} className="btn-orange mt-2 w-fit disabled:opacity-60">{saving ? 'Saving…' : 'Save changes'}</button>
       </form>

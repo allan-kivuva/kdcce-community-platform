@@ -4,7 +4,7 @@ import uuid
 from flask import current_app
 
 from ..extensions import db
-from ..models import AssignmentAttachment, AssignmentMessage, AssignmentReview
+from ..models import AssignmentAttachment, AssignmentChecklistItem, AssignmentMessage, AssignmentReview, utcnow
 
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB — the actual application-level limit;
 # config.py's MAX_CONTENT_LENGTH is a slightly higher hard backstop enforced
@@ -146,3 +146,73 @@ def submit_review(assignment_type, assignment_id, reviewed_by_id, rating, commen
     review.reviewed_by_id = reviewed_by_id
     db.session.flush()
     return review
+
+
+# ---------- Assignment checklist ----------
+# Fixed, code-defined item sets — not user-editable, and deliberately only
+# defined for assignment types where a checklist makes sense (home visits).
+# An assistance_request has no entry here on purpose: "do not create
+# unnecessary checklists for every assignment type."
+
+CHECKLIST_DEFINITIONS = {
+    "home_visit": (
+        ("wellbeing", "Checked general wellbeing"),
+        ("basic_needs", "Confirmed basic needs"),
+        ("concerns", "Discussed concerns"),
+        ("follow_up_check", "Checked whether follow-up is required"),
+        ("visit_notes", "Completed visit notes"),
+    ),
+}
+
+
+class ChecklistError(Exception):
+    """Raised for an assignment type with no checklist, or an unknown item
+    key — routes catch this and turn it into the app's standard 400 shape."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+
+def get_checklist(assignment_type, assignment_id):
+    """Always returns the full, fixed item list for this assignment type —
+    merging any existing rows over the code-defined defaults — never just
+    whatever happens to have a DB row yet."""
+    definition = CHECKLIST_DEFINITIONS.get(assignment_type)
+    if definition is None:
+        return []
+    existing = {
+        row.item_key: row
+        for row in AssignmentChecklistItem.query.filter_by(assignment_type=assignment_type, assignment_id=assignment_id).all()
+    }
+    items = []
+    for key, label in definition:
+        row = existing.get(key)
+        items.append({
+            "item_key": key,
+            "label": label,
+            "checked": row.checked if row else False,
+            "checked_at": row.checked_at.isoformat() if row and row.checked_at else None,
+            "checked_by": row.checked_by.name if row and row.checked_by else None,
+        })
+    return items
+
+
+def set_checklist_item(assignment_type, assignment_id, item_key, checked, checked_by_id):
+    definition = CHECKLIST_DEFINITIONS.get(assignment_type)
+    if definition is None:
+        raise ChecklistError("This assignment type has no checklist")
+    if item_key not in dict(definition):
+        raise ChecklistError("Unknown checklist item")
+
+    row = AssignmentChecklistItem.query.filter_by(
+        assignment_type=assignment_type, assignment_id=assignment_id, item_key=item_key
+    ).first()
+    if row is None:
+        row = AssignmentChecklistItem(assignment_type=assignment_type, assignment_id=assignment_id, item_key=item_key)
+        db.session.add(row)
+    row.checked = checked
+    row.checked_at = utcnow() if checked else None
+    row.checked_by_id = checked_by_id if checked else None
+    db.session.flush()
+    return row
