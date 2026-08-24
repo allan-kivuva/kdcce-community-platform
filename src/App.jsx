@@ -5,6 +5,7 @@ import Footer from './components/Footer'
 import Home from './pages/Home'
 import About from './pages/About'
 import Programs from './pages/Programs'
+import ProgramDetail from './pages/ProgramDetail'
 import Gallery from './pages/Gallery'
 import Blog from './pages/Blog'
 import BlogPost from './pages/BlogPost'
@@ -27,12 +28,13 @@ export default function App() {
 
   return <>
     <ScrollToTop />
-    {!isAdminArea && <Header />}
+    {!isAdminArea && <div className="print:hidden"><Header /></div>}
     <main>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/programs" element={<Programs />} />
+        <Route path="/programs/:id" element={<ProgramDetail />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:id" element={<BlogPost />} />
@@ -44,6 +46,6 @@ export default function App() {
         <Route path="/admin/*" element={<AdminDashboard />} />
       </Routes>
     </main>
-    {!isAdminArea && <Footer />}
+    {!isAdminArea && <div className="print:hidden"><Footer /></div>}
   </>
 }

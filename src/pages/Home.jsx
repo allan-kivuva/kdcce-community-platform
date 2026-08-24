@@ -1,13 +1,15 @@
 import React from 'react'
 import { ArrowRight, Heart, Users, HandHeart } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { programs, team } from '../data/siteData'
+import { programs } from '../data/siteData'
 import ProgramCard from '../components/ProgramCard'
 import Stats from '../components/Stats'
 import GalleryPreview from '../components/GalleryPreview'
 import CtaBanner from '../components/CtaBanner'
+import { useApiList } from '../lib/useApiList'
 
 export default function Home() {
+  const { items: team, loading: teamLoading, error: teamError } = useApiList('/api/team', 'team')
   return <div>
     <section className="relative min-h-[690px] overflow-hidden bg-black">
       <img src="/images/hero.jpg" alt="Older adults smiling together" className="absolute inset-0 h-full w-full object-cover object-center" />
@@ -33,10 +35,10 @@ export default function Home() {
 
     <section className="bg-kCream py-20"><div className="container-k"><div className="mb-10 flex items-end justify-between"><div><div className="eyebrow">What we do</div><h2 className="mt-2 font-display text-4xl font-bold text-kGreen">Our programs</h2></div><Link to="/programs" className="hidden items-center gap-2 font-semibold text-kOrange sm:flex">See all programs <ArrowRight size={16}/></Link></div><div className="grid gap-5 md:grid-cols-3">{programs.slice(3,6).map(p=><ProgramCard key={p.title} program={p} />)}</div></div></section>
 
-    <section className="container-k py-20"><div className="grid gap-8 rounded-2xl bg-[#fff7f1] p-6 md:grid-cols-[.9fr_1.1fr] md:p-10"><img className="h-[320px] w-full rounded-2xl object-cover" src="/images/social.jpg" alt="Older people sharing community time"/><div className="flex flex-col justify-center"><div className="section-kicker">Mary's Story</div><div className="mt-3 text-5xl leading-none text-kOrange">“</div><p className="mt-1 max-w-xl font-display text-2xl font-semibold leading-9 text-kGreen">Before joining the center, many days felt quiet. Now I have people to talk to, new things to learn and reasons to keep showing up.</p><div className="mt-5 text-sm font-bold text-kInk">Mary Akinyi, 72</div><div className="mt-4 flex gap-1">{Array.from({length:5}).map((_,i)=><span key={i} className="h-2 w-2 rounded-full bg-kOrange" />)}</div></div></div></section>
+    <section className="container-k py-20"><div className="grid gap-8 rounded-2xl bg-kTint p-6 md:grid-cols-[.9fr_1.1fr] md:p-10"><img className="h-[320px] w-full rounded-2xl object-cover" src="/images/social.jpg" alt="Older people sharing community time"/><div className="flex flex-col justify-center"><div className="section-kicker">Mary's Story</div><div className="mt-3 text-5xl leading-none text-kOrange">“</div><p className="mt-1 max-w-xl font-display text-2xl font-semibold leading-9 text-kGreen">Before joining the center, many days felt quiet. Now I have people to talk to, new things to learn and reasons to keep showing up.</p><div className="mt-5 text-sm font-bold text-kInk">Mary Akinyi, 72</div><div className="mt-4 flex gap-1">{Array.from({length:5}).map((_,i)=><span key={i} className="h-2 w-2 rounded-full bg-kOrange" />)}</div></div></div></section>
 
     <GalleryPreview />
-    <section className="container-k pb-16"><div className="mb-8 text-center"><div className="eyebrow">The people behind the work</div><h2 className="mt-2 font-display text-3xl font-bold text-kGreen">Meet our team</h2></div><div className="grid gap-5 sm:grid-cols-3">{team.map(member=><div key={member.name} className="overflow-hidden rounded-2xl border border-slate-100 bg-white text-center shadow-soft"><img src={member.image} alt={member.name} className="h-60 w-full object-cover"/><div className="p-5"><h3 className="font-display text-lg font-semibold text-kGreen">{member.name}</h3><p className="mt-1 text-sm text-kMuted">{member.role}</p></div></div>)}</div></section>
+    {!teamLoading && !teamError && team.length > 0 && <section className="container-k pb-16"><div className="mb-8 text-center"><div className="eyebrow">The people behind the work</div><h2 className="mt-2 font-display text-3xl font-bold text-kGreen">Meet our team</h2></div><div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-5">{team.map(member=><div key={member.id} className="overflow-hidden card-k text-center"><img src={member.image} alt={member.name} className="h-60 w-full object-cover"/><div className="p-5"><h3 className="font-display text-lg font-semibold text-kGreen">{member.name}</h3><p className="mt-1 text-sm text-kMuted">{member.role}</p></div></div>)}</div></section>}
     <CtaBanner />
   </div>
 }
