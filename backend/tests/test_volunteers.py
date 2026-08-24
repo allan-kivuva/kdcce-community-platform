@@ -43,6 +43,54 @@ def test_me_requires_auth(client):
     assert resp.status_code == 401
 
 
+# ---------- Application (extends the same self-update path) ----------
+
+def test_volunteer_can_submit_full_application_via_self_update(client, make_user, auth_header):
+    """The public 'Become a Volunteer' flow is register, then this PATCH —
+    no separate application endpoint. All of these fields must round-trip."""
+    _, access_token, _ = make_user(email="applicant1@example.com")
+    resp = client.patch(
+        "/api/volunteers/me",
+        json={
+            "phone": "0712345678",
+            "skills": "First aid, community outreach",
+            "availability": "Weekends",
+            "areas_of_interest": "Home visits, feeding program",
+            "experience": "Two years volunteering at a local shelter",
+            "motivation": "I want to give back to my community",
+            "bio": "Retired teacher, enjoys spending time with elders",
+        },
+        headers=auth_header(access_token),
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()["volunteer"]
+    assert body["areas_of_interest"] == "Home visits, feeding program"
+    assert body["experience"] == "Two years volunteering at a local shelter"
+    assert body["motivation"] == "I want to give back to my community"
+    assert body["status"] == "Pending"
+
+
+def test_applicant_cannot_set_rejection_reason_on_self(client, make_user, auth_header):
+    _, access_token, _ = make_user(email="applicant2@example.com")
+    resp = client.patch("/api/volunteers/me", json={"rejection_reason": "I approve myself"}, headers=auth_header(access_token))
+    assert resp.status_code == 400  # not a field on the self-update schema
+
+
+def test_applicant_cannot_approve_self_via_crafted_payload(client, make_user, auth_header):
+    """A payload mixing a legitimate self-editable field with status must
+    be rejected wholesale — marshmallow's unknown-field handling means the
+    whole request 400s rather than silently dropping just 'status'."""
+    _, access_token, _ = make_user(email="applicant3@example.com")
+    resp = client.patch(
+        "/api/volunteers/me",
+        json={"bio": "Trustworthy, promise", "status": "Verified"},
+        headers=auth_header(access_token),
+    )
+    assert resp.status_code == 400
+    profile = client.get("/api/volunteers/me", headers=auth_header(access_token)).get_json()["volunteer"]
+    assert profile["status"] == "Pending"
+
+
 # ---------- Staff management ----------
 
 def test_staff_can_list_volunteers(client, make_user, make_staff_user, auth_header):
@@ -96,6 +144,32 @@ def test_volunteer_rejects_invalid_status(client, make_user, make_staff_user, au
     volunteer_id = client.get("/api/volunteers", headers=auth_header(token)).get_json()["volunteers"][0]["id"]
     resp = client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "SuperVolunteer"}, headers=auth_header(token))
     assert resp.status_code == 400
+
+
+def test_staff_can_reject_with_a_reason(client, make_user, make_staff_user, auth_header):
+    make_user(email="vol11@example.com")
+    _, token = make_staff_user("admin")
+    volunteer_id = client.get("/api/volunteers", headers=auth_header(token)).get_json()["volunteers"][0]["id"]
+
+    resp = client.patch(
+        f"/api/volunteers/{volunteer_id}",
+        json={"status": "Rejected", "rejection_reason": "We currently have enough volunteers for this area."},
+        headers=auth_header(token),
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()["volunteer"]
+    assert body["status"] == "Rejected"
+    assert body["rejection_reason"] == "We currently have enough volunteers for this area."
+
+
+def test_rejection_reason_is_cleared_on_a_later_reversal(client, make_user, make_staff_user, auth_header):
+    make_user(email="vol12@example.com")
+    _, token = make_staff_user("admin")
+    volunteer_id = client.get("/api/volunteers", headers=auth_header(token)).get_json()["volunteers"][0]["id"]
+    client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "Rejected", "rejection_reason": "Not a fit right now."}, headers=auth_header(token))
+
+    reversed_ = client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "Verified"}, headers=auth_header(token))
+    assert reversed_.get_json()["volunteer"]["rejection_reason"] is None
 
 
 def test_list_filters_by_status(client, make_user, make_staff_user, auth_header):

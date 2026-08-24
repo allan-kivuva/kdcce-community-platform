@@ -11,15 +11,12 @@ import AttendanceManager from './admin/AttendanceManager'
 import HealthManager from './admin/HealthManager'
 import MedicationManager from './admin/MedicationManager'
 import VolunteerManager from './admin/VolunteerManager'
-import MyVolunteerProfile from './admin/MyVolunteerProfile'
 import HomeVisitManager from './admin/HomeVisitManager'
-import MyAssignments from './admin/MyAssignments'
 import DonationsManager from './admin/DonationsManager'
 import FeedingManager from './admin/FeedingManager'
 import InventoryManager from './admin/InventoryManager'
 import ActivityManager from './admin/ActivityManager'
 import AssistanceManager from './admin/AssistanceManager'
-import MyAssistanceRequests from './admin/MyAssistanceRequests'
 import IncidentManager from './admin/IncidentManager'
 import ReportsManager from './admin/ReportsManager'
 import AnalyticsManager from './admin/AnalyticsManager'
@@ -236,15 +233,12 @@ export default function AdminDashboard() {
       <Route path="health" element={<HealthManager showToast={showToast} />} />
       <Route path="medication" element={<MedicationManager showToast={showToast} />} />
       <Route path="volunteers" element={<VolunteerManager showToast={showToast} />} />
-      <Route path="profile" element={<MyVolunteerProfile showToast={showToast} />} />
       <Route path="home-visits" element={<HomeVisitManager showToast={showToast} />} />
-      <Route path="assignments" element={<MyAssignments showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager showToast={showToast} />} />
       <Route path="feeding" element={<FeedingManager showToast={showToast} />} />
       <Route path="inventory" element={<InventoryManager showToast={showToast} />} />
       <Route path="activities" element={<ActivityManager showToast={showToast} />} />
       <Route path="assistance" element={<AssistanceManager showToast={showToast} />} />
-      <Route path="my-assistance" element={<MyAssistanceRequests showToast={showToast} />} />
       <Route path="incidents" element={<IncidentManager showToast={showToast} />} />
       <Route path="reports" element={<ReportsManager showToast={showToast} />} />
       <Route path="analytics" element={<AnalyticsManager />} />

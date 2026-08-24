@@ -127,6 +127,31 @@ def test_volunteer_cannot_view_a_visit_not_assigned_to_them(client, make_staff_u
     assert resp.status_code == 403
 
 
+def test_rejected_volunteer_loses_access_to_previously_assigned_visits(client, make_user, make_staff_user, auth_header):
+    """A volunteer who was Verified and assigned a visit, then later
+    Rejected, must lose list/get/update access immediately — even though
+    assigned_to_id still points at them (rejecting doesn't reassign or
+    clear existing visits)."""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol_user, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token, email="revoked@example.com")
+    visit = client.post("/api/home-visits", json={"elderly_member_id": member["id"], "assigned_to_id": vol_user["id"], **VALID_REASON}, headers=auth_header(admin_token)).get_json()["visit"]
+
+    vid = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    volunteer_id = next(v for v in vid if v["email"] == "revoked@example.com")["id"]
+    client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "Rejected"}, headers=auth_header(admin_token))
+
+    assert client.get("/api/home-visits", headers=auth_header(vol_token)).status_code == 403
+    assert client.get(f"/api/home-visits/{visit['id']}", headers=auth_header(vol_token)).status_code == 403
+    assert client.patch(f"/api/home-visits/{visit['id']}", json={"status": "Completed"}, headers=auth_header(vol_token)).status_code == 403
+
+
+def test_pending_volunteer_cannot_list_or_view_home_visits(client, make_user, auth_header):
+    _, vol_token, _ = make_user(email="stillpending@example.com")
+    resp = client.get("/api/home-visits", headers=auth_header(vol_token))
+    assert resp.status_code == 403
+
+
 def test_staff_sees_all_visits_and_can_filter(client, make_staff_user, auth_header):
     _, token = make_staff_user("admin")
     m1 = _register_member(client, token, auth_header, "Mary Achieng")

@@ -21,7 +21,7 @@ export default function AdminLogin(){
         body: { email: f.get('email'), password: f.get('password') }
       })
       setSession(access_token, user, refresh_token)
-      navigate(user.role === 'volunteer' ? '/admin/profile' : '/admin')
+      navigate(user.role === 'volunteer' ? '/volunteer' : '/admin')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign in failed. Please try again.')
       setSigningIn(false)

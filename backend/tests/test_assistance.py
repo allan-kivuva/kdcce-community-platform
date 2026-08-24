@@ -92,6 +92,31 @@ def test_volunteer_cannot_view_a_request_not_assigned_to_them(client, make_staff
     assert resp.status_code == 403
 
 
+def test_rejected_volunteer_loses_access_to_previously_assigned_requests(client, make_user, make_staff_user, auth_header):
+    """Same reasoning as the equivalent home-visits test: assigned_to_id
+    isn't cleared on rejection, so access must be gated on current status,
+    not just "am I the assignee.\""""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol_user, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token, email="revoked-ar@example.com")
+    req = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], "assigned_to_id": vol_user["id"], **VALID}, headers=auth_header(admin_token)).get_json()["request"]
+
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    volunteer_id = next(v for v in volunteers if v["email"] == "revoked-ar@example.com")["id"]
+    client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "Rejected"}, headers=auth_header(admin_token))
+
+    assert client.get("/api/assistance-requests", headers=auth_header(vol_token)).status_code == 403
+    assert client.get(f"/api/assistance-requests/{req['id']}", headers=auth_header(vol_token)).status_code == 403
+    assert client.patch(f"/api/assistance-requests/{req['id']}", json={"status": "Completed"}, headers=auth_header(vol_token)).status_code == 403
+    assert client.post(f"/api/assistance-requests/{req['id']}/accept", headers=auth_header(vol_token)).status_code == 403
+
+
+def test_pending_volunteer_cannot_list_or_view_requests(client, make_user, auth_header):
+    _, vol_token, _ = make_user(email="stillpending-ar@example.com")
+    resp = client.get("/api/assistance-requests", headers=auth_header(vol_token))
+    assert resp.status_code == 403
+
+
 def test_staff_sees_all_and_can_filter(client, make_staff_user, auth_header):
     _, token = make_staff_user("admin")
     m1 = _register_member(client, token, auth_header, "Mary Achieng")

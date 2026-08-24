@@ -84,6 +84,22 @@ def update_volunteer(volunteer_id):
                 "Your volunteer application has been verified. You can now be assigned to home visits and assistance requests.",
                 related_resource_type="volunteer_profile", related_resource_id=profile.id,
             )
+        elif data["status"] == "Rejected":
+            reason = data.get("rejection_reason")
+            message = "Your KDCCE volunteer application was not approved."
+            if reason:
+                message += f" Reason: {reason}"
+            notify(
+                profile.user_id, "Volunteer Rejected", "Volunteer application update",
+                message,
+                related_resource_type="volunteer_profile", related_resource_id=profile.id,
+            )
+        if data["status"] != "Rejected":
+            # A reason only ever makes sense attached to the rejection it
+            # explains — clear any stale one left over from an earlier
+            # rejection that was later reversed, so it can't resurface
+            # attached to a different decision.
+            data["rejection_reason"] = None
 
     for field, value in data.items():
         setattr(profile, field, value)

@@ -9,6 +9,13 @@ a `volunteer` token only ever sees/edits visits assigned to them, and only
 a restricted set of fields (the outcome, not the assignment). `admin`/
 `staff` see and can edit everything.
 
+A volunteer's access additionally requires their **current**
+`VolunteerProfile.status == "Verified"` (see [volunteers.md](volunteers.md#portal-access-gate))
+— checked fresh on every request, not just at assignment time. A visit's
+`assigned_to_id` isn't cleared if that volunteer is later rejected, so
+relying only on "is this visit assigned to me" would leave a rejected
+volunteer with access to visits from before their rejection.
+
 Home visit object:
 ```json
 {

@@ -438,13 +438,16 @@ VOLUNTEER_STATUSES = ("Pending", "Verified", "Rejected")
 
 
 class VolunteerProfile(db.Model):
-    """Extra profile data for a User with role='volunteer'. Kept separate
-    from User (the auth record) since not every field here belongs on
-    every account, and self-registration only ever produces a bare User —
-    this row is created alongside it (see auth/routes.py) with status
-    Pending, then staff verify it here. Assignment history and hours are
-    intentionally not stored here — they're derived from HomeVisit rows
-    once that module exists, not duplicated."""
+    """Extra profile data for a User with role='volunteer' — and, since it
+    already carries status/reviewed_by/reviewed_at, this row IS the
+    volunteer application, not a separate thing from it. There's
+    deliberately no distinct VolunteerApplication model: that would just
+    duplicate the status/reviewer/timestamp bookkeeping already here.
+    created_at doubles as "submitted_at" — the row is created alongside
+    the User at registration (see auth/routes.py) with status Pending,
+    then staff verify or reject it here. Assignment history and hours are
+    intentionally not stored here — they're derived from HomeVisit rows,
+    not duplicated."""
 
     __tablename__ = "volunteer_profiles"
 
@@ -453,8 +456,12 @@ class VolunteerProfile(db.Model):
     phone = db.Column(db.String(40), nullable=True)
     skills = db.Column(db.Text, nullable=True)
     availability = db.Column(db.Text, nullable=True)
+    areas_of_interest = db.Column(db.Text, nullable=True)
+    experience = db.Column(db.Text, nullable=True)
+    motivation = db.Column(db.Text, nullable=True)
     bio = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="Pending")
+    rejection_reason = db.Column(db.Text, nullable=True)
     reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
@@ -472,8 +479,12 @@ class VolunteerProfile(db.Model):
             "phone": self.phone,
             "skills": self.skills,
             "availability": self.availability,
+            "areas_of_interest": self.areas_of_interest,
+            "experience": self.experience,
+            "motivation": self.motivation,
             "bio": self.bio,
             "status": self.status,
+            "rejection_reason": self.rejection_reason,
             "reviewed_by": self.reviewed_by.name if self.reviewed_by else None,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
             "created_at": self.created_at.isoformat(),
@@ -899,7 +910,7 @@ class Incident(db.Model):
 NOTIFICATION_TYPES = (
     "Medication Reminder", "Health Follow-up", "Home Visit Assignment", "Home Visit Reminder",
     "Assistance Request Assignment", "Low Inventory Alert", "Upcoming Activity",
-    "Incident Follow-up", "Volunteer Verified", "System Notification",
+    "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "System Notification",
 )
 
 

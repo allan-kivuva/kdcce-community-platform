@@ -11,6 +11,12 @@ Like home visits, this has real per-user scoping: a `volunteer` token
 only ever sees/edits requests assigned to them, and only a restricted
 outcome field set. `admin`/`staff` see and can edit everything.
 
+Same current-status gate as home visits (see
+[volunteers.md](volunteers.md#portal-access-gate)): a volunteer also needs
+`VolunteerProfile.status == "Verified"` right now, checked fresh on every
+request — including `POST .../accept` — not just "is this assigned to
+me," since rejection doesn't retroactively clear existing assignments.
+
 **Acceptance is not just another status a PATCH can set.** It's its own
 endpoint (`POST .../accept`) callable only by the assigned user, on their
 own request, only while it's `Assigned`. This is the one meaningful

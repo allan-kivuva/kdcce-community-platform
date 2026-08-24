@@ -22,6 +22,17 @@ def _member_or_400(member_id):
     return None
 
 
+def _is_verified_volunteer(user_id):
+    """A volunteer's access here must track their CURRENT status, not just
+    whatever assigned_to_id was set to at assignment time — if a verified
+    volunteer with active visits is later rejected, they must lose access
+    to those visits immediately, even though assigned_to_id still points
+    at them. Relying only on "assigned_to_id == me" would miss that case,
+    since a rejection doesn't retroactively clear existing assignments."""
+    profile = VolunteerProfile.query.filter_by(user_id=user_id).first()
+    return profile is not None and profile.status == "Verified"
+
+
 def _assignee_or_400(user_id):
     """A visit may be assigned to staff/admin (a caregiver) or a volunteer
     whose profile has been verified — never an unverified volunteer."""
@@ -94,6 +105,8 @@ def list_visits():
     query = HomeVisit.query
 
     if role == "volunteer":
+        if not _is_verified_volunteer(int(get_jwt_identity())):
+            return jsonify(error="Forbidden"), 403
         query = query.filter(HomeVisit.assigned_to_id == int(get_jwt_identity()))
     elif role not in ("admin", "staff"):
         return jsonify(error="Forbidden"), 403
@@ -121,8 +134,10 @@ def list_visits():
 def get_visit(visit_id):
     visit = get_or_404(HomeVisit, visit_id)
     role = get_jwt().get("role")
-    if role not in ("admin", "staff") and visit.assigned_to_id != int(get_jwt_identity()):
-        return jsonify(error="Forbidden"), 403
+    if role not in ("admin", "staff"):
+        identity = int(get_jwt_identity())
+        if visit.assigned_to_id != identity or not _is_verified_volunteer(identity):
+            return jsonify(error="Forbidden"), 403
     return jsonify(visit=visit.to_dict()), 200
 
 
@@ -146,7 +161,7 @@ def update_visit(visit_id):
             invalid = _assignee_or_400(data["assigned_to_id"])
             if invalid:
                 return invalid
-    elif visit.assigned_to_id == int(get_jwt_identity()):
+    elif visit.assigned_to_id == int(get_jwt_identity()) and _is_verified_volunteer(int(get_jwt_identity())):
         try:
             data = assignee_update_schema.load(payload, partial=True)
         except ValidationError as err:

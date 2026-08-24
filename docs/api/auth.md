@@ -32,6 +32,12 @@ issue.
   ```
 - **Errors:** `400` validation (`name` required, `email` must be valid, `password` min length 8); `409` if the email is already registered.
 
+This is also the first step of the public "Become a Volunteer" flow
+(`frontend/src/pages/BecomeAVolunteer.jsx`) — it's the same endpoint,
+not a separate one. The page follows this call immediately with
+`PATCH /api/volunteers/me` to fill in the rest of the application; see
+[volunteers.md](volunteers.md).
+
 ## POST /api/auth/login
 
 - **Auth:** none. Rate-limited: 10/min per IP.

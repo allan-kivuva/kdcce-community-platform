@@ -22,6 +22,16 @@ def _member_or_400(member_id):
     return None
 
 
+def _is_verified_volunteer(user_id):
+    """Access must track CURRENT status, not just assigned_to_id — if a
+    verified volunteer with active requests is later rejected, they lose
+    access to those requests immediately, even though assigned_to_id still
+    points at them (a rejection doesn't retroactively clear it). Same
+    reasoning as homevisits/routes.py's identical helper."""
+    profile = VolunteerProfile.query.filter_by(user_id=user_id).first()
+    return profile is not None and profile.status == "Verified"
+
+
 def _assignee_or_400(user_id):
     """Same rule as HomeVisit.assigned_to_id: staff/admin, or a volunteer
     only once their profile is Verified — never an unverified one."""
@@ -85,6 +95,8 @@ def list_requests():
     query = AssistanceRequest.query
 
     if role == "volunteer":
+        if not _is_verified_volunteer(int(get_jwt_identity())):
+            return jsonify(error="Forbidden"), 403
         query = query.filter(AssistanceRequest.assigned_to_id == int(get_jwt_identity()))
     elif role not in ("admin", "staff"):
         return jsonify(error="Forbidden"), 403
@@ -115,8 +127,10 @@ def list_requests():
 def get_request(request_id):
     req = get_or_404(AssistanceRequest, request_id)
     role = get_jwt().get("role")
-    if role not in ("admin", "staff") and req.assigned_to_id != int(get_jwt_identity()):
-        return jsonify(error="Forbidden"), 403
+    if role not in ("admin", "staff"):
+        identity = int(get_jwt_identity())
+        if req.assigned_to_id != identity or not _is_verified_volunteer(identity):
+            return jsonify(error="Forbidden"), 403
     return jsonify(request=req.to_dict()), 200
 
 
@@ -144,7 +158,7 @@ def update_request(request_id):
             invalid = _home_visit_or_400(data["home_visit_id"])
             if invalid:
                 return invalid
-    elif req.assigned_to_id == int(get_jwt_identity()):
+    elif req.assigned_to_id == int(get_jwt_identity()) and _is_verified_volunteer(int(get_jwt_identity())):
         try:
             data = assignee_update_schema.load(payload, partial=True)
         except ValidationError as err:
@@ -177,7 +191,8 @@ def accept_request(request_id):
     value — only the assigned user can call it, only on their own
     request, only from Assigned."""
     req = get_or_404(AssistanceRequest, request_id)
-    if req.assigned_to_id != int(get_jwt_identity()):
+    identity = int(get_jwt_identity())
+    if req.assigned_to_id != identity or not _is_verified_volunteer(identity):
         return jsonify(error="Forbidden"), 403
     if req.status != "Assigned":
         return jsonify(error=f"Cannot accept a request in '{req.status}' status — it must be 'Assigned' first"), 409

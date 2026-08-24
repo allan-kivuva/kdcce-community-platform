@@ -13,8 +13,10 @@ import Sponsor from './pages/Sponsor'
 import Donate from './pages/Donate'
 import Contact from './pages/Contact'
 import Crafts from './pages/Crafts'
+import BecomeAVolunteer from './pages/BecomeAVolunteer'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
+import VolunteerPortal from './pages/VolunteerPortal'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -24,7 +26,7 @@ function ScrollToTop() {
 
 export default function App() {
   const { pathname } = useLocation()
-  const isAdminArea = pathname.startsWith('/admin')
+  const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/volunteer')
 
   return <>
     <ScrollToTop />
@@ -42,8 +44,10 @@ export default function App() {
         <Route path="/donate" element={<Donate />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/crafts" element={<Crafts />} />
+        <Route path="/become-a-volunteer" element={<BecomeAVolunteer />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/*" element={<AdminDashboard />} />
+        <Route path="/volunteer/*" element={<VolunteerPortal />} />
       </Routes>
     </main>
     {!isAdminArea && <div className="print:hidden"><Footer /></div>}

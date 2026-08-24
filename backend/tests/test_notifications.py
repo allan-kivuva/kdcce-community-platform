@@ -218,14 +218,31 @@ def test_volunteer_verification_notifies_the_volunteer(client, make_user, make_s
     assert notifications[0]["notification_type"] == "Volunteer Verified"
 
 
-def test_volunteer_rejection_does_not_send_verified_notification(client, make_user, make_staff_user, auth_header):
+def test_volunteer_rejection_sends_rejected_not_verified_notification(client, make_user, make_staff_user, auth_header):
     _, admin_token = make_staff_user("admin")
     _, vol_token, _ = make_user(email="vera-m@example.com")
     volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
     vid = next(v for v in volunteers if v["email"] == "vera-m@example.com")["id"]
 
     client.patch(f"/api/volunteers/{vid}", json={"status": "Rejected"}, headers=auth_header(admin_token))
-    assert client.get("/api/notifications", headers=auth_header(vol_token)).get_json()["notifications"] == []
+    notifications = client.get("/api/notifications", headers=auth_header(vol_token)).get_json()["notifications"]
+    assert len(notifications) == 1
+    assert notifications[0]["notification_type"] == "Volunteer Rejected"
+
+
+def test_volunteer_rejection_reason_is_included_in_notification_message(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, vol_token, _ = make_user(email="vera-reason@example.com")
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == "vera-reason@example.com")["id"]
+
+    client.patch(
+        f"/api/volunteers/{vid}",
+        json={"status": "Rejected", "rejection_reason": "We currently have enough volunteers for this area."},
+        headers=auth_header(admin_token),
+    )
+    notifications = client.get("/api/notifications", headers=auth_header(vol_token)).get_json()["notifications"]
+    assert "We currently have enough volunteers for this area." in notifications[0]["message"]
 
 
 def test_low_stock_movement_notifies_admin_and_staff(client, make_staff_user, auth_header):
