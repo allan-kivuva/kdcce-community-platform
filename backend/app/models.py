@@ -996,7 +996,7 @@ NOTIFICATION_TYPES = (
     "Medication Reminder", "Health Follow-up", "Home Visit Assignment", "Home Visit Reminder",
     "Assistance Request Assignment", "Low Inventory Alert", "Upcoming Activity",
     "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "Assignment Message",
-    "Follow-up Assigned", "Follow-up Overdue", "Critical Incident", "System Notification",
+    "Follow-up Assigned", "Follow-up Overdue", "Critical Incident", "Assignment Reviewed", "System Notification",
 )
 
 
@@ -1135,6 +1135,46 @@ class AssignmentMessage(db.Model):
             "sender_name": self.sender.name,
             "body": self.body,
             "created_at": self.created_at.isoformat(),
+        }
+
+
+class AssignmentReview(db.Model):
+    """Admin's review of a completed HomeVisit or AssistanceRequest — a
+    1-5 star rating plus an optional comment on how the volunteer/staff
+    member handled it. Same polymorphic assignment_type/assignment_id
+    pointer as AssignmentAttachment/AssignmentMessage, for the same
+    reason (one FK can't target two tables). At most one review per
+    assignment — submitting again replaces it, same "create or replace"
+    behavior as AssignmentAttachment's photo, not a review history.
+
+    Deliberately admin-only to create (see roles_required("admin") in
+    routes.py, not the usual ("admin", "staff") pair used everywhere
+    else in this app) — reviewing/rating a volunteer's work is reserved
+    to admin specifically. Only allowed once the assignment's own status
+    is Completed; reviewing incomplete work doesn't make sense."""
+
+    __tablename__ = "assignment_reviews"
+    __table_args__ = (db.UniqueConstraint("assignment_type", "assignment_id", name="uq_assignment_review"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_type = db.Column(db.String(20), nullable=False)
+    assignment_id = db.Column(db.Integer, nullable=False)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rating = db.Column(db.Integer, nullable=False)
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    reviewed_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "reviewed_by": self.reviewed_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 

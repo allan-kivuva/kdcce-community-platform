@@ -110,3 +110,15 @@ GET  /api/assistance-requests/{id}/photo
 GET  /api/assistance-requests/{id}/messages
 POST /api/assistance-requests/{id}/messages    { "body": "..." }
 ```
+
+## Admin review (star rating)
+
+Same mechanism as home visits — see
+[home-visits.md](home-visits.md#admin-review-star-rating). `POST` requires
+`admin` (not staff) and `status == "Completed"` (`409` otherwise); `GET`
+uses `_can_access_request`.
+
+```
+POST /api/assistance-requests/{id}/review   { "rating": 1-5, "comment": "optional" }
+GET  /api/assistance-requests/{id}/review
+```

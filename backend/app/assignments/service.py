@@ -4,7 +4,7 @@ import uuid
 from flask import current_app
 
 from ..extensions import db
-from ..models import AssignmentAttachment, AssignmentMessage
+from ..models import AssignmentAttachment, AssignmentMessage, AssignmentReview
 
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB — the actual application-level limit;
 # config.py's MAX_CONTENT_LENGTH is a slightly higher hard backstop enforced
@@ -126,3 +126,23 @@ def send_message(assignment_type, assignment_id, sender_id, body):
     db.session.add(message)
     db.session.flush()
     return message
+
+
+# ---------- Admin review (star rating + comment) ----------
+# At most one review per assignment — same "create or replace" behavior
+# as the photo above, not a review history.
+
+def get_review(assignment_type, assignment_id):
+    return AssignmentReview.query.filter_by(assignment_type=assignment_type, assignment_id=assignment_id).first()
+
+
+def submit_review(assignment_type, assignment_id, reviewed_by_id, rating, comment):
+    review = get_review(assignment_type, assignment_id)
+    if review is None:
+        review = AssignmentReview(assignment_type=assignment_type, assignment_id=assignment_id, reviewed_by_id=reviewed_by_id)
+        db.session.add(review)
+    review.rating = rating
+    review.comment = comment
+    review.reviewed_by_id = reviewed_by_id
+    db.session.flush()
+    return review

@@ -2,8 +2,10 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
-from ..assignments.schemas import AssignmentMessageCreateSchema
-from ..assignments.service import AttachmentError, attachment_file_path, get_attachment, list_messages, save_photo, send_message
+from ..assignments.schemas import AssignmentMessageCreateSchema, AssignmentReviewCreateSchema
+from ..assignments.service import (
+    AttachmentError, attachment_file_path, get_attachment, get_review, list_messages, save_photo, send_message, submit_review,
+)
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..followups.service import create_from_source
@@ -18,6 +20,7 @@ create_schema = HomeVisitCreateSchema()
 staff_update_schema = HomeVisitStaffUpdateSchema()
 assignee_update_schema = HomeVisitAssigneeUpdateSchema()
 message_schema = AssignmentMessageCreateSchema()
+review_schema = AssignmentReviewCreateSchema()
 
 
 def _member_or_400(member_id):
@@ -282,6 +285,48 @@ def create_visit_message(visit_id):
         )
     db.session.commit()
     return jsonify(message=message.to_dict()), 201
+
+
+@bp.post("/<int:visit_id>/review")
+@roles_required("admin")
+def review_visit(visit_id):
+    """Admin-only, not the usual ("admin", "staff") pair used elsewhere in
+    this module — rating a volunteer's completed work is reserved to
+    admin specifically. Only allowed once the visit is Completed."""
+    visit = get_or_404(HomeVisit, visit_id)
+    if visit.status != "Completed":
+        return jsonify(error="Can only review a visit once it is Completed"), 409
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = review_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    review = submit_review("home_visit", visit.id, int(get_jwt_identity()), data["rating"], data.get("comment"))
+    if visit.assigned_to_id:
+        stars = "★" * data["rating"] + "☆" * (5 - data["rating"])
+        notify(
+            visit.assigned_to_id, "Assignment Reviewed", f"Your home visit was reviewed — {stars}",
+            data.get("comment") or f"Rated {data['rating']}/5 stars.",
+            related_resource_type="home_visit", related_resource_id=visit.id,
+        )
+    db.session.commit()
+    return jsonify(review=review.to_dict()), 201
+
+
+@bp.get("/<int:visit_id>/review")
+@jwt_required()
+def get_visit_review(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+    review = get_review("home_visit", visit.id)
+    if review is None:
+        return jsonify(error="No review for this visit"), 404
+    return jsonify(review=review.to_dict()), 200
 
 
 @bp.delete("/<int:visit_id>")

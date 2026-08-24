@@ -4,6 +4,7 @@ import Shell from '../../components/admin/Shell'
 import Modal from '../../components/admin/Modal'
 import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
 import AssignmentConversation from '../../components/admin/AssignmentConversation'
+import AssignmentReview from '../../components/admin/AssignmentReview'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
 import { apiFetch } from '../../lib/api'
@@ -105,6 +106,7 @@ function EditVisitModal({ visit, assignees, onClose, onSaved, showToast }) {
     </form>
 
     <div className="mt-6 border-t border-kBorderSoft pt-5"><span className="text-xs font-bold uppercase tracking-wide text-kMuted">Photo</span><div className="mt-3"><AssignmentPhoto basePath={`/api/home-visits/${visit.id}`} /></div></div>
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentReview basePath={`/api/home-visits/${visit.id}`} status={visit.status} showToast={showToast} /></div>
     <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentConversation basePath={`/api/home-visits/${visit.id}`} /></div>
   </Modal>
 }

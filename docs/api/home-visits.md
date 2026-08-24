@@ -122,3 +122,25 @@ just documents the endpoint shapes.
 - **Auth:** same as above. **Request:** `{ "body": "string, required, max 4000" }`.
 - Notifies the other party via the existing notification system (`Assignment Message`): the volunteer's message notifies whoever requested the visit; a staff/admin message notifies the assigned volunteer.
 - **Response `201`:** `{ "message": { ... } }`. Errors: `400`, `403`, `404`.
+
+## Admin review (star rating)
+
+`AssignmentReview` — a 1-5 star rating plus an optional comment on how
+the assigned volunteer/staff member handled a **Completed** visit.
+**Admin only to submit** — deliberately not the usual `("admin", "staff")`
+pair used everywhere else in this module. Viewing uses the same access
+rule as the visit itself (`_can_access_visit`), so the reviewed volunteer
+can see their own feedback. At most one review per assignment —
+submitting again replaces it, same "create or replace" behavior as the
+photo above. Full design rationale in
+[assignment-collaboration.md](assignment-collaboration.md).
+
+### POST /api/home-visits/{id}/review
+- **Auth:** `admin` only. Requires the visit's `status` to already be `Completed` — `409` otherwise.
+- **Request:** `{ "rating": "integer 1-5, required", "comment": "string, optional, max 2000" }`.
+- Notifies the assigned volunteer/staff (`Assignment Reviewed`, title includes a `★`/`☆` rendering of the rating) via the existing `notify()`.
+- **Response `201`:** `{ "review": { "id", "rating", "comment", "reviewed_by", "created_at", "updated_at" } }`. Errors: `400`, `403`, `404`, `409`.
+
+### GET /api/home-visits/{id}/review
+- **Auth:** same access rule as the visit itself (`admin`/`staff`, or the assigned user while currently `Verified`).
+- **Response `200`:** `{ "review": { ... } }`. Errors: `403`, `404` (no review yet, or the visit doesn't exist).

@@ -4,6 +4,7 @@ import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import Modal from '../../components/admin/Modal'
 import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
 import AssignmentConversation from '../../components/admin/AssignmentConversation'
+import AssignmentReview from '../../components/admin/AssignmentReview'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
 import { apiFetch, uploadFile, ApiError } from '../../lib/api'
@@ -49,6 +50,7 @@ function UpdateModal({ req, onClose, onSaved, showToast }) {
       <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60"><ImagePlus size={16} /> {saving ? 'Saving…' : 'Save update'}</button>
     </form>
 
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentReview basePath={basePath} status={req.status} showToast={showToast} /></div>
     <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentConversation basePath={basePath} /></div>
   </Modal>
 }
