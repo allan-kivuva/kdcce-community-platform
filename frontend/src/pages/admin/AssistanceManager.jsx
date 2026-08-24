@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, Plus, Pencil } from 'lucide-react'
 import Shell from '../../components/admin/Shell'
 import Modal from '../../components/admin/Modal'
+import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
+import AssignmentConversation from '../../components/admin/AssignmentConversation'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
 import { apiFetch } from '../../lib/api'
@@ -86,6 +88,9 @@ function EditRequestModal({ req, assignees, onClose, onSaved, showToast }) {
       <label className="text-sm font-semibold">Outcome notes<textarea name="outcome_notes" defaultValue={req.outcome_notes} rows={2} className="input-k mt-2" /></label>
       <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Saving…' : 'Save changes'}</button>
     </form>
+
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><span className="text-xs font-bold uppercase tracking-wide text-kMuted">Photo</span><div className="mt-3"><AssignmentPhoto basePath={`/api/assistance-requests/${req.id}`} /></div></div>
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentConversation basePath={`/api/assistance-requests/${req.id}`} /></div>
   </Modal>
 }
 

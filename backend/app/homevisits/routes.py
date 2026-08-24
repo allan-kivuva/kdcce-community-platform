@@ -1,7 +1,9 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..assignments.schemas import AssignmentMessageCreateSchema
+from ..assignments.service import AttachmentError, attachment_file_path, get_attachment, list_messages, save_photo, send_message
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
@@ -14,6 +16,7 @@ bp = Blueprint("homevisits", __name__, url_prefix="/api/home-visits")
 create_schema = HomeVisitCreateSchema()
 staff_update_schema = HomeVisitStaffUpdateSchema()
 assignee_update_schema = HomeVisitAssigneeUpdateSchema()
+message_schema = AssignmentMessageCreateSchema()
 
 
 def _member_or_400(member_id):
@@ -31,6 +34,15 @@ def _is_verified_volunteer(user_id):
     since a rejection doesn't retroactively clear existing assignments."""
     profile = VolunteerProfile.query.filter_by(user_id=user_id).first()
     return profile is not None and profile.status == "Verified"
+
+
+def _can_access_visit(visit, role, identity):
+    """The single access rule for a visit's photo/messages — identical to
+    the ownership check get_visit already applies to the visit itself, so
+    photo/message access can never be broader than viewing the visit."""
+    if role in ("admin", "staff"):
+        return True
+    return visit.assigned_to_id == identity and _is_verified_volunteer(identity)
 
 
 def _assignee_or_400(user_id):
@@ -185,6 +197,82 @@ def update_visit(visit_id):
 
     db.session.commit()
     return jsonify(visit=visit.to_dict()), 200
+
+
+@bp.post("/<int:visit_id>/photo")
+@jwt_required()
+def upload_visit_photo(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    try:
+        attachment = save_photo("home_visit", visit.id, identity, request.files.get("photo"))
+    except AttachmentError as err:
+        return jsonify(error="Validation failed", details={"photo": [err.message]}), 400
+
+    db.session.commit()
+    return jsonify(attachment=attachment.to_dict()), 201
+
+
+@bp.get("/<int:visit_id>/photo")
+@jwt_required()
+def get_visit_photo(visit_id):
+    """Streams the file directly — there is no public static URL for this
+    at any point; only this authenticated, authorized endpoint can ever
+    read it."""
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    attachment = get_attachment("home_visit", visit.id)
+    if attachment is None:
+        return jsonify(error="No photo for this visit"), 404
+    return send_file(attachment_file_path(attachment), mimetype=attachment.mime_type, download_name=attachment.original_filename)
+
+
+@bp.get("/<int:visit_id>/messages")
+@jwt_required()
+def list_visit_messages(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+    return jsonify(messages=[m.to_dict() for m in list_messages("home_visit", visit.id)]), 200
+
+
+@bp.post("/<int:visit_id>/messages")
+@jwt_required()
+def create_visit_message(visit_id):
+    visit = get_or_404(HomeVisit, visit_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_visit(visit, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = message_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    message = send_message("home_visit", visit.id, identity, data["body"])
+    # The volunteer messages the person who requested the visit; staff
+    # messaging in either notifies the assigned volunteer.
+    recipient_id = visit.requested_by_id if identity == visit.assigned_to_id else visit.assigned_to_id
+    if recipient_id and recipient_id != identity:
+        notify(
+            recipient_id, "Assignment Message", "New message on a home visit",
+            f"{message.sender.name}: {data['body'][:200]}",
+            related_resource_type="home_visit", related_resource_id=visit.id,
+        )
+    db.session.commit()
+    return jsonify(message=message.to_dict()), 201
 
 
 @bp.delete("/<int:visit_id>")

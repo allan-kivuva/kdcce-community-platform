@@ -17,6 +17,13 @@ class Config:
 
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
 
+    # Hard backstop enforced by Werkzeug before the request body is even
+    # parsed — the assignment-photo upload separately validates a 5MB
+    # limit at the application level; this just stops an oversized body
+    # from ever reaching that code. Slightly above 5MB for multipart
+    # framing/other form fields overhead.
+    MAX_CONTENT_LENGTH = 6 * 1024 * 1024
+
 
 class TestConfig(Config):
     TESTING = True

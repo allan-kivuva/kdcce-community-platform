@@ -87,3 +87,33 @@ Two different bodies depending on who's asking — same endpoint.
 
 ## DELETE /api/home-visits/{id}
 - **Auth:** `admin` only. Response `204`. Errors: `404`.
+
+## Photo and private conversation
+
+`backend/app/assignments/` — an optional photo and a private volunteer↔
+staff message thread on a visit, added alongside (not replacing) the
+outcome fields above. Access to both is exactly the same rule as the
+visit itself — see `_can_access_visit` in `routes.py`: `admin`/`staff`
+always, or the assigned user while currently `Verified`; nobody else.
+Full design rationale (why this isn't the Phase 7D public contact Inbox,
+why the photo is never a public URL, file validation approach) is in
+[assignment-collaboration.md](assignment-collaboration.md) — this section
+just documents the endpoint shapes.
+
+### POST /api/home-visits/{id}/photo
+- **Auth:** same as above. `multipart/form-data`, field name `photo`. JPEG/PNG/WebP only (verified from the file's own bytes, not the filename or client Content-Type), max 5MB.
+- At most one photo per visit — uploading again replaces the previous one.
+- **Response `201`:** `{ "attachment": { "id", "original_filename", "mime_type", "file_size", "uploaded_by", "created_at" } }`.
+- **Errors:** `400` (`{"error": "Validation failed", "details": {"photo": [...]}}` — missing/wrong type/too large), `403`, `404`.
+
+### GET /api/home-visits/{id}/photo
+- **Auth:** same as above. Streams the file directly (`Content-Type` is the server-verified MIME type). There is no other way to reach this file — no public static path exists for it.
+- **Errors:** `404` if no photo has been uploaded (or the visit doesn't exist), `403`, `401`.
+
+### GET /api/home-visits/{id}/messages
+- **Auth:** same as above. **Response `200`:** `{ "messages": [ { "id", "sender_id", "sender_name", "body", "created_at" }, ... ] }`, oldest first.
+
+### POST /api/home-visits/{id}/messages
+- **Auth:** same as above. **Request:** `{ "body": "string, required, max 4000" }`.
+- Notifies the other party via the existing notification system (`Assignment Message`): the volunteer's message notifies whoever requested the visit; a staff/admin message notifies the assigned volunteer.
+- **Response `201`:** `{ "message": { ... } }`. Errors: `400`, `403`, `404`.

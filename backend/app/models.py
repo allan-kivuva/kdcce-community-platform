@@ -910,7 +910,7 @@ class Incident(db.Model):
 NOTIFICATION_TYPES = (
     "Medication Reminder", "Health Follow-up", "Home Visit Assignment", "Home Visit Reminder",
     "Assistance Request Assignment", "Low Inventory Alert", "Upcoming Activity",
-    "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "System Notification",
+    "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "Assignment Message", "System Notification",
 )
 
 
@@ -977,6 +977,79 @@ class RevokedToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     jti = db.Column(db.String(36), unique=True, nullable=False, index=True)
     revoked_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+ASSIGNMENT_TYPES = ("home_visit", "assistance_request")
+
+
+class AssignmentAttachment(db.Model):
+    """An optional photo attached to a HomeVisit or AssistanceRequest on
+    completion. assignment_type + assignment_id is the same polymorphic
+    pointer as Notification.related_resource_id, for the same reason: a
+    single FK can't target two tables, and one nullable FK column per
+    possible target is worse bloat than this. At most one row per
+    (assignment_type, assignment_id) — "a photo," not "photos."
+
+    The actual file lives on disk under instance/uploads/assignment_photos/
+    (never under app/static/ — nothing serves that path publicly), named by
+    storage_key, a server-generated uuid4, never the client's filename.
+    original_filename is display-only metadata; it is never used to build
+    a filesystem path. mime_type is what the server verified from the
+    file's own bytes, not what the client's Content-Type header claimed."""
+
+    __tablename__ = "assignment_attachments"
+    __table_args__ = (db.UniqueConstraint("assignment_type", "assignment_id", name="uq_assignment_attachment"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_type = db.Column(db.String(20), nullable=False)
+    assignment_id = db.Column(db.Integer, nullable=False)
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    storage_key = db.Column(db.String(64), unique=True, nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    mime_type = db.Column(db.String(50), nullable=False)
+    file_size = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    uploaded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "original_filename": self.original_filename,
+            "mime_type": self.mime_type,
+            "file_size": self.file_size,
+            "uploaded_by": self.uploaded_by.name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class AssignmentMessage(db.Model):
+    """A private message on a HomeVisit or AssistanceRequest's own
+    conversation thread — the volunteer assigned to it and admin/staff
+    only, never a public/general chat. Same polymorphic
+    assignment_type/assignment_id pointer as AssignmentAttachment, for the
+    same reason."""
+
+    __tablename__ = "assignment_messages"
+    __table_args__ = (db.Index("ix_assignment_messages_assignment", "assignment_type", "assignment_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_type = db.Column(db.String(20), nullable=False)
+    assignment_id = db.Column(db.Integer, nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+    sender = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "sender_id": self.sender_id,
+            "sender_name": self.sender.name,
+            "body": self.body,
+            "created_at": self.created_at.isoformat(),
+        }
 
 
 class InboxMessage(db.Model):

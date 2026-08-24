@@ -2,3 +2,7 @@
 *.swp
 .idea/
 .vscode/
+
+# Uploaded assignment photos — private, never committed (dev DB is
+# local/throwaway; the files it references shouldn't live in git either).
+backend/instance/uploads/

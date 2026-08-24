@@ -88,3 +88,17 @@ reachable via the accept endpoint below.
 
 ## DELETE /api/assistance-requests/{id}
 - **Auth:** `admin` only. Errors: `404`.
+
+## Photo and private conversation
+
+Identical mechanism and endpoint shapes as home visits — see
+[home-visits.md](home-visits.md#photo-and-private-conversation) and
+[assignment-collaboration.md](assignment-collaboration.md) for the full
+design. Same access rule as this request itself (`_can_access_request`):
+
+```
+POST /api/assistance-requests/{id}/photo       multipart/form-data, field "photo"
+GET  /api/assistance-requests/{id}/photo
+GET  /api/assistance-requests/{id}/messages
+POST /api/assistance-requests/{id}/messages    { "body": "..." }
+```

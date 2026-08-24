@@ -1,9 +1,12 @@
-import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Pencil, ImagePlus, AlertCircle } from 'lucide-react'
 import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import Modal from '../../components/admin/Modal'
+import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
+import AssignmentConversation from '../../components/admin/AssignmentConversation'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
+import { uploadFile, ApiError } from '../../lib/api'
 
 const STATUSES = ['Assigned', 'Scheduled', 'In Progress', 'Completed', 'Cancelled']
 const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
@@ -12,6 +15,9 @@ function fmtDate(iso) { return iso ? new Date(iso).toLocaleString([], { dateStyl
 
 function UpdateModal({ visit, onClose, onSaved, showToast }) {
   const [saving, setSaving] = useState(false)
+  const [photoKey, setPhotoKey] = useState(0) // bump to force AssignmentPhoto to refetch after upload
+  const fileRef = useRef(null)
+  const basePath = `/api/home-visits/${visit.id}`
 
   async function save(e) {
     e.preventDefault()
@@ -26,9 +32,14 @@ function UpdateModal({ visit, onClose, onSaved, showToast }) {
     setSaving(true)
     try {
       await onSaved(visit.id, data)
+      const file = fileRef.current?.files?.[0]
+      if (file) {
+        await uploadFile(`${basePath}/photo`, 'photo', file)
+        setPhotoKey(k => k + 1)
+        if (fileRef.current) fileRef.current.value = ''
+      }
       showToast('Visit updated')
-      onClose()
-    } catch (err) { showToast(errorMessage(err)) }
+    } catch (err) { showToast(err instanceof ApiError ? err.message : errorMessage(err)) }
     finally { setSaving(false) }
   }
 
@@ -40,8 +51,18 @@ function UpdateModal({ visit, onClose, onSaved, showToast }) {
       <label className="text-sm font-semibold">Support provided<textarea name="support_provided" defaultValue={visit.support_provided} rows={2} className="input-k mt-2" /></label>
       <label className="flex items-center gap-2 text-sm font-semibold"><input name="follow_up_required" type="checkbox" defaultChecked={visit.follow_up_required} className="h-5 w-5" /> Follow-up required</label>
       <label className="text-sm font-semibold">Follow-up notes<textarea name="follow_up_notes" defaultValue={visit.follow_up_notes} rows={2} className="input-k mt-2" /></label>
-      <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Saving…' : 'Save update'}</button>
+
+      <div>
+        <span className="text-sm font-semibold">Optional photo</span>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="input-k mt-2" />
+        <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-kMuted"><AlertCircle size={14} className="mt-0.5 shrink-0" /> Photo upload is optional. Only upload a photo when appropriate and with the required consent. Do not upload sensitive or unrelated images.</p>
+        <div className="mt-3"><AssignmentPhoto key={photoKey} basePath={basePath} /></div>
+      </div>
+
+      <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60"><ImagePlus size={16} /> {saving ? 'Saving…' : 'Save update'}</button>
     </form>
+
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentConversation basePath={basePath} /></div>
   </Modal>
 }
 

@@ -103,3 +103,51 @@ export async function downloadFile(path, filename) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** Uploads a file as multipart/form-data. Deliberately not apiFetch: that
+ * always JSON.stringifies the body and sets Content-Type: application/json,
+ * neither of which is right for a file upload — the browser must set its
+ * own multipart boundary in the Content-Type header. */
+export async function uploadFile(path, fieldName, file) {
+  const formData = new FormData()
+  formData.append(fieldName, file)
+  const token = getToken()
+
+  let res
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+  } catch {
+    throw new ApiError('Could not reach the server. Check your connection and try again.', 0)
+  }
+
+  const payload = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new ApiError(payload?.error || `Upload failed (${res.status})`, res.status, payload?.details)
+  }
+  return payload
+}
+
+/** Fetches a private, authenticated image and returns a local blob: URL
+ * for it — a plain <img src="..."> can't send an Authorization header, so
+ * this is the only way to display a photo the backend gates by auth.
+ * Caller is responsible for URL.revokeObjectURL(...) when done with it
+ * (see AssignmentPhoto's cleanup effect). Returns null on any failure
+ * (no photo, no access, etc.) rather than throwing — callers treat "no
+ * photo to show" as a normal state, not an error to surface.*/
+export async function fetchAuthenticatedImageUrl(path) {
+  const token = getToken()
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
+}

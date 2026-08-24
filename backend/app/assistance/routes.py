@@ -1,7 +1,9 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..assignments.schemas import AssignmentMessageCreateSchema
+from ..assignments.service import AttachmentError, attachment_file_path, get_attachment, list_messages, save_photo, send_message
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import AssistanceRequest, ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
@@ -14,6 +16,7 @@ bp = Blueprint("assistance", __name__, url_prefix="/api/assistance-requests")
 create_schema = AssistanceRequestCreateSchema()
 staff_update_schema = AssistanceRequestStaffUpdateSchema()
 assignee_update_schema = AssistanceRequestAssigneeUpdateSchema()
+message_schema = AssignmentMessageCreateSchema()
 
 
 def _member_or_400(member_id):
@@ -30,6 +33,14 @@ def _is_verified_volunteer(user_id):
     reasoning as homevisits/routes.py's identical helper."""
     profile = VolunteerProfile.query.filter_by(user_id=user_id).first()
     return profile is not None and profile.status == "Verified"
+
+
+def _can_access_request(req, role, identity):
+    """Same access rule get_request already applies to the request itself
+    — photo/message access can never be broader than viewing it."""
+    if role in ("admin", "staff"):
+        return True
+    return req.assigned_to_id == identity and _is_verified_volunteer(identity)
 
 
 def _assignee_or_400(user_id):
@@ -200,6 +211,77 @@ def accept_request(request_id):
     req.status = "Accepted"
     db.session.commit()
     return jsonify(request=req.to_dict()), 200
+
+
+@bp.post("/<int:request_id>/photo")
+@jwt_required()
+def upload_request_photo(request_id):
+    req = get_or_404(AssistanceRequest, request_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_request(req, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    try:
+        attachment = save_photo("assistance_request", req.id, identity, request.files.get("photo"))
+    except AttachmentError as err:
+        return jsonify(error="Validation failed", details={"photo": [err.message]}), 400
+
+    db.session.commit()
+    return jsonify(attachment=attachment.to_dict()), 201
+
+
+@bp.get("/<int:request_id>/photo")
+@jwt_required()
+def get_request_photo(request_id):
+    req = get_or_404(AssistanceRequest, request_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_request(req, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    attachment = get_attachment("assistance_request", req.id)
+    if attachment is None:
+        return jsonify(error="No photo for this request"), 404
+    return send_file(attachment_file_path(attachment), mimetype=attachment.mime_type, download_name=attachment.original_filename)
+
+
+@bp.get("/<int:request_id>/messages")
+@jwt_required()
+def list_request_messages(request_id):
+    req = get_or_404(AssistanceRequest, request_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_request(req, role, identity):
+        return jsonify(error="Forbidden"), 403
+    return jsonify(messages=[m.to_dict() for m in list_messages("assistance_request", req.id)]), 200
+
+
+@bp.post("/<int:request_id>/messages")
+@jwt_required()
+def create_request_message(request_id):
+    req = get_or_404(AssistanceRequest, request_id)
+    role = get_jwt().get("role")
+    identity = int(get_jwt_identity())
+    if not _can_access_request(req, role, identity):
+        return jsonify(error="Forbidden"), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = message_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    message = send_message("assistance_request", req.id, identity, data["body"])
+    recipient_id = req.requested_by_id if identity == req.assigned_to_id else req.assigned_to_id
+    if recipient_id and recipient_id != identity:
+        notify(
+            recipient_id, "Assignment Message", "New message on an assistance request",
+            f"{message.sender.name}: {data['body'][:200]}",
+            related_resource_type="assistance_request", related_resource_id=req.id,
+        )
+    db.session.commit()
+    return jsonify(message=message.to_dict()), 201
 
 
 @bp.delete("/<int:request_id>")

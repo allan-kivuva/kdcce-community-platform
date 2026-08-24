@@ -1,25 +1,36 @@
-import { useState } from 'react'
-import { Check, Pencil } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Check, Pencil, ImagePlus, AlertCircle } from 'lucide-react'
 import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import Modal from '../../components/admin/Modal'
+import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
+import AssignmentConversation from '../../components/admin/AssignmentConversation'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
-import { apiFetch } from '../../lib/api'
+import { apiFetch, uploadFile, ApiError } from '../../lib/api'
 
 const ASSIGNEE_STATUSES = ['In Progress', 'Completed', 'Cancelled']
 const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
 
 function UpdateModal({ req, onClose, onSaved, showToast }) {
   const [saving, setSaving] = useState(false)
+  const [photoKey, setPhotoKey] = useState(0)
+  const fileRef = useRef(null)
+  const basePath = `/api/assistance-requests/${req.id}`
+
   async function save(e) {
     e.preventDefault()
     const f = new FormData(e.target)
     setSaving(true)
     try {
       await onSaved(req.id, { status: f.get('status'), outcome_notes: f.get('outcome_notes') || null })
+      const file = fileRef.current?.files?.[0]
+      if (file) {
+        await uploadFile(`${basePath}/photo`, 'photo', file)
+        setPhotoKey(k => k + 1)
+        if (fileRef.current) fileRef.current.value = ''
+      }
       showToast('Request updated')
-      onClose()
-    } catch (err) { showToast(errorMessage(err)) }
+    } catch (err) { showToast(err instanceof ApiError ? err.message : errorMessage(err)) }
     finally { setSaving(false) }
   }
   return <Modal title={`${req.elderly_member_name} — ${req.elderly_member_code}`} onClose={onClose}>
@@ -27,8 +38,18 @@ function UpdateModal({ req, onClose, onSaved, showToast }) {
     <form onSubmit={save} className="grid gap-4">
       <label className="text-sm font-semibold">Status<select name="status" defaultValue={ASSIGNEE_STATUSES.includes(req.status) ? req.status : 'In Progress'} className="input-k mt-2">{ASSIGNEE_STATUSES.map(s => <option key={s}>{s}</option>)}</select></label>
       <label className="text-sm font-semibold">Outcome notes<textarea name="outcome_notes" defaultValue={req.outcome_notes} rows={3} className="input-k mt-2" placeholder="What happened, how it went" /></label>
-      <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Saving…' : 'Save update'}</button>
+
+      <div>
+        <span className="text-sm font-semibold">Optional photo</span>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="input-k mt-2" />
+        <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-kMuted"><AlertCircle size={14} className="mt-0.5 shrink-0" /> Photo upload is optional. Only upload a photo when appropriate and with the required consent. Do not upload sensitive or unrelated images.</p>
+        <div className="mt-3"><AssignmentPhoto key={photoKey} basePath={basePath} /></div>
+      </div>
+
+      <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60"><ImagePlus size={16} /> {saving ? 'Saving…' : 'Save update'}</button>
     </form>
+
+    <div className="mt-6 border-t border-kBorderSoft pt-5"><AssignmentConversation basePath={basePath} /></div>
   </Modal>
 }
 
