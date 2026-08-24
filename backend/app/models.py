@@ -411,6 +411,53 @@ class MedicationAdministration(db.Model):
         }
 
 
+VOLUNTEER_STATUSES = ("Pending", "Verified", "Rejected")
+
+
+class VolunteerProfile(db.Model):
+    """Extra profile data for a User with role='volunteer'. Kept separate
+    from User (the auth record) since not every field here belongs on
+    every account, and self-registration only ever produces a bare User —
+    this row is created alongside it (see auth/routes.py) with status
+    Pending, then staff verify it here. Assignment history and hours are
+    intentionally not stored here — they're derived from HomeVisit rows
+    once that module exists, not duplicated."""
+
+    __tablename__ = "volunteer_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    phone = db.Column(db.String(40), nullable=True)
+    skills = db.Column(db.Text, nullable=True)
+    availability = db.Column(db.Text, nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Pending")
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "name": self.user.name,
+            "email": self.user.email,
+            "phone": self.phone,
+            "skills": self.skills,
+            "availability": self.availability,
+            "bio": self.bio,
+            "status": self.status,
+            "reviewed_by": self.reviewed_by.name if self.reviewed_by else None,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

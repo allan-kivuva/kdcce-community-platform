@@ -11,6 +11,17 @@ def test_register_creates_volunteer_by_default(client):
     assert "password" not in body["user"] and "password_hash" not in body["user"]
 
 
+def test_register_creates_a_volunteer_profile(client, make_staff_user, auth_header):
+    client.post(
+        "/api/auth/register",
+        json={"name": "Derrick", "email": "derrick2@example.com", "password": "hunter22"},
+    )
+    _, token = make_staff_user("admin")
+    resp = client.get("/api/volunteers", headers=auth_header(token))
+    emails = [v["email"] for v in resp.get_json()["volunteers"]]
+    assert "derrick2@example.com" in emails
+
+
 def test_register_rejects_duplicate_email(client, make_user):
     make_user(email="dupe@example.com")
     resp = client.post(

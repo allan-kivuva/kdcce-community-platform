@@ -8,7 +8,7 @@ from flask_jwt_extended import (
 from marshmallow import ValidationError
 
 from ..extensions import db, limiter
-from ..models import User
+from ..models import User, VolunteerProfile
 from .schemas import RegisterSchema, LoginSchema
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -39,6 +39,11 @@ def register():
     user = User(name=data["name"].strip(), email=data["email"].lower(), role="volunteer")
     user.set_password(data["password"])
     db.session.add(user)
+    db.session.flush()  # assigns user.id without committing yet
+    # Public self-signup always makes a volunteer, so it always gets a
+    # volunteer profile too (status Pending until staff verify it) —
+    # see app/volunteers/.
+    db.session.add(VolunteerProfile(user_id=user.id))
     db.session.commit()
 
     access_token = create_access_token(identity=str(user.id), additional_claims=_identity_claims(user))
