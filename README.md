@@ -53,6 +53,107 @@ cp .env.example .env
 npm run dev
 ```
 
+## Demo Login Credentials
+
+⚠️ **These credentials are for local development/demo purposes only. Do
+not use them in production, and never seed a real deployment with a
+password this simple.**
+
+A fresh clone has an empty database — none of these accounts exist until
+someone creates them locally by running the seed commands below. They're
+not hardcoded into the app; they're just what running those commands with
+these specific values produces.
+
+### Admin
+
+```
+Email:    admin@kdcce.local
+Password: changeme123
+```
+
+### Volunteer 1 (Verified — assigned Elderly 1–4)
+
+```
+Email:    grace.mwangi@example.com
+Password: GraceDemo2026!
+```
+
+### Volunteer 2 (Verified — assigned Elderly 5–8)
+
+```
+Email:    daniel.otieno@example.com
+Password: DanielDemo2026!
+```
+
+### Volunteer 3 (Verified — assigned Elderly 9–12)
+
+```
+Email:    faith.wanjiru@example.com
+Password: FaithDemo2026!
+```
+
+### Volunteer 4 (Verified — assigned Elderly 13–16)
+
+```
+Email:    samuel.kiptoo@example.com
+Password: SamuelDemo2026!
+```
+
+### Volunteer 5 (Verified — assigned Elderly 17–20)
+
+```
+Email:    esther.njeri@example.com
+Password: EstherDemo2026!
+```
+
+### Demo data
+
+Running `flask seed-demo` (see below) creates:
+
+- **5 volunteers**, all `Verified` — different skills, availability,
+  experience and areas of interest each, so the admin volunteer list
+  looks realistic rather than identical rows.
+- **20 elderly members** — fictional Kibera-area residents with varied
+  gender, age, OPA/community-group membership (2 demo OPAs, some members
+  in neither), emergency contacts, health notes, allergies, dietary
+  requirements, and vulnerability notes.
+- **20 home-visit assignments** — the existing `HomeVisit.assigned_to_id`
+  mechanism, 4 elderly members assigned to each volunteer in order
+  (Volunteer 1 → Elderly 1–4, Volunteer 2 → Elderly 5–8, ...), each
+  firing the normal assignment notification.
+
+All fictional, all `@example.com`, no real person's information.
+
+### Running the demo seed
+
+```bash
+cd backend
+
+# 1. Create the admin account (needed first — the demo seed needs an
+#    existing admin/staff user to record as who requested each visit)
+FLASK_APP=wsgi.py ./.venv/bin/python3 -m flask seed-admin \
+  --name "Admin" --email "admin@kdcce.local" --password "changeme123" --role admin
+
+# 2. Create the 5 volunteers, 20 elderly members, and their assignments
+FLASK_APP=wsgi.py ./.venv/bin/python3 -m flask seed-demo
+```
+
+`seed-demo` is idempotent — every insert is guarded by an existence check
+first (by email, elder name, or OPA name), so running it again after it's
+already run fills in anything missing and never creates duplicates. It
+never deletes, resets, or modifies existing data.
+
+Want a volunteer application in a non-Verified state to test that flow
+too (e.g. the "application under review" or "not approved" portal
+screens)? That still has to go through the real public flow — register,
+then have the admin approve/reject it via `/admin/volunteers` or:
+
+```bash
+curl -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"...","email":"...@example.com","password":"..."}'
+```
+
 ## Team ownership
 
 - **Frontend team** works in `frontend/`: pages, components, forms, tables,

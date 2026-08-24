@@ -65,8 +65,9 @@ def create_app(config_object=Config):
     app.register_blueprint(inbox_bp)
     app.register_blueprint(admin_inbox_bp)
 
-    from .cli import seed_admin
+    from .cli import seed_admin, seed_demo
     app.cli.add_command(seed_admin)
+    app.cli.add_command(seed_demo)
 
     @app.get("/api/health")
     def health():
