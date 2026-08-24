@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
-import { NavLink, Routes, Route, Link, useNavigate } from 'react-router-dom'
-import { BarChart3, BookOpen, FileImage, Heart, Inbox, LayoutDashboard, LogOut, Settings, Users, Package, Search, Plus, Trash2, Pencil, Download, ChevronDown, Mail, MailOpen, Reply } from 'lucide-react'
+import { useState } from 'react'
+import { Routes, Route, Link } from 'react-router-dom'
+import { BarChart3, Search, Plus, Trash2, Pencil, Download, ChevronDown, Mail, MailOpen, Reply, Settings } from 'lucide-react'
 import Modal from '../components/admin/Modal'
 import Toast from '../components/admin/Toast'
-import ThemeToggle from '../theme/ThemeToggle'
-import { apiFetch, downloadFile, getStoredUser, clearSession, ApiError } from '../lib/api'
-
-const menu = [['Overview', '/admin', 'LayoutDashboard'], ['Donations', '/admin/donations', 'Heart'], ['Blog Posts', '/admin/blog', 'BookOpen'], ['Gallery', '/admin/gallery', 'FileImage'], ['Team', '/admin/team', 'Users'], ['Craft Shop', '/admin/crafts', 'Package'], ['Inbox', '/admin/inbox', 'Inbox']]
-const icons = { LayoutDashboard, Heart, BookOpen, FileImage, Users, Package, Inbox }
+import Shell from '../components/admin/Shell'
+import { useToast, errorMessage, LoadingState, ErrorState } from '../components/admin/adminHelpers'
+import { downloadFile } from '../lib/api'
+import { useApiResource } from '../lib/useApiResource'
+import ElderlyManager from './admin/ElderlyManager'
+import AttendanceManager from './admin/AttendanceManager'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -15,26 +16,6 @@ const initialInbox = [
   { id: 2, name: 'Daniel K.', email: 'daniel@example.com', subject: 'Partnership proposal', message: 'Our company would like to explore a partnership for the feeding program.', date: '2026-08-17', read: true },
   { id: 3, name: 'Faith W.', email: 'faith@example.com', subject: 'Thank you', message: 'Thank you for the wonderful work you do for our elders in Kibera.', date: '2026-08-15', read: true }
 ]
-
-function useToast() {
-  const [toast, setToast] = useState('')
-  function show(message) { setToast(message); window.clearTimeout(show._t); show._t = window.setTimeout(() => setToast(''), 2200) }
-  return [toast, show]
-}
-
-function errorMessage(err) {
-  return err instanceof ApiError ? err.message : 'Something went wrong. Please try again.'
-}
-
-function Shell({ children }) {
-  const navigate = useNavigate()
-  const user = getStoredUser()
-  function signOut() { clearSession(); navigate('/admin/login') }
-  return <div className="min-h-[80vh] bg-kCream"><div className="container-k grid gap-6 py-8 lg:grid-cols-[230px_1fr]"><aside className="rounded-2xl bg-[#071724] p-4 text-white"><div className="mb-5 rounded-2xl bg-white px-3 py-3"><img src="/images/logo.png" alt="KDCCE" className="h-14 w-auto max-w-[185px] object-contain object-left" /></div><div className="mb-4 flex items-center justify-between gap-2 px-3"><div><div className="text-xs font-semibold uppercase tracking-widest text-kLime">Staff workspace</div><div className="mt-1 font-display text-xl font-bold">Admin portal</div>{user && <div className="mt-1 text-xs text-white/60">{user.name} &middot; {user.role}</div>}</div><ThemeToggle variant="dark" /></div><nav className="grid gap-1">{menu.map(([label, to, icon]) => { const Icon = icons[icon]; return <NavLink end={to === '/admin'} key={to} to={to} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${isActive ? 'bg-white text-kGreen' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}><Icon size={17} />{label}</NavLink> })}</nav><Link to="/" className="mt-6 flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/70 hover:bg-white/10"><LogOut size={17} /> Back to website</Link><button onClick={signOut} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/70 hover:bg-white/10"><LogOut size={17} /> Sign out</button></aside><section>{children}</section></div></div>
-}
-
-function LoadingState({ label }) { return <div className="card-k mt-7 p-10 text-center text-sm text-kMuted">Loading {label}…</div> }
-function ErrorState({ message, onRetry }) { return <div className="card-k mt-7 p-10 text-center"><p className="text-sm text-kOrange">{message}</p><button onClick={onRetry} className="mt-4 text-sm font-bold text-kGreen">Try again</button></div> }
 
 function QuickActionMenu() {
   const [open, setOpen] = useState(false)
@@ -315,49 +296,6 @@ function SettingsPage({ showToast }) {
   </div></Shell>
 }
 
-// One small hook per resource: fetch on mount, expose CRUD helpers that
-// call the API and then patch local state from the server's response
-// (never from what was merely submitted), plus a 401 → sign-out redirect.
-function useApiResource(path, { listKey, itemKey }) {
-  const navigate = useNavigate()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const data = await apiFetch(path)
-      setItems(data[listKey])
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) { clearSession(); navigate('/admin/login'); return }
-      setError(errorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [path, listKey, navigate])
-
-  useEffect(() => { load() }, [load])
-
-  async function create(body, basePath) {
-    const data = await apiFetch(basePath ?? path, { method: 'POST', body })
-    setItems(prev => [data[itemKey], ...prev])
-    return data[itemKey]
-  }
-  async function patch(id, body, basePath) {
-    const data = await apiFetch(`${basePath ?? path}/${id}`, { method: 'PATCH', body })
-    setItems(prev => prev.map(it => it.id === id ? data[itemKey] : it))
-    return data[itemKey]
-  }
-  async function remove(id, basePath) {
-    await apiFetch(`${basePath ?? path}/${id}`, { method: 'DELETE' })
-    setItems(prev => prev.filter(it => it.id !== id))
-  }
-
-  return { items, loading, error, reload: load, create, patch, remove }
-}
-
 export default function AdminDashboard() {
   const donationsApi = useApiResource('/api/donations', { listKey: 'donations', itemKey: 'donation' })
   const blogApi = useApiResource('/api/admin/blog', { listKey: 'posts', itemKey: 'post' })
@@ -370,6 +308,8 @@ export default function AdminDashboard() {
   return <>
     <Routes>
       <Route index element={<Overview donations={donationsApi.items} blogPosts={blogApi.items} crafts={craftsApi.items} />} />
+      <Route path="elderly" element={<ElderlyManager showToast={showToast} />} />
+      <Route path="attendance" element={<AttendanceManager showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager
         donations={donationsApi.items} loading={donationsApi.loading} error={donationsApi.error} reload={donationsApi.reload}
         addDonation={body => donationsApi.create(body, '/api/donations')}

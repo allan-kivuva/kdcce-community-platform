@@ -164,6 +164,122 @@ class Craft(db.Model):
         }
 
 
+class OPA(db.Model):
+    """Older Persons Association / community group an elderly member
+    belongs to. Simple reference table — deleting one just clears the
+    reference on any member that pointed to it (see the FK ondelete)."""
+
+    __tablename__ = "opas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), unique=True, nullable=False)
+    location = db.Column(db.String(150), nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "location": self.location,
+            "description": self.description,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+ELDERLY_GENDERS = ("Male", "Female", "Other")
+ELDERLY_STATUSES = ("Active", "Inactive", "Deceased", "Transferred")
+
+
+class ElderlyMember(db.Model):
+    __tablename__ = "elderly_members"
+
+    id = db.Column(db.Integer, primary_key=True)
+    # KDCCE-<year>-<zero-padded id>, assigned server-side on creation —
+    # same pattern as Donation.receipt_id. Never client-supplied.
+    member_id = db.Column(db.String(30), unique=True, nullable=False)
+    full_name = db.Column(db.String(150), nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=True)
+    gender = db.Column(db.String(10), nullable=False)
+    location = db.Column(db.String(150), nullable=True)
+    opa_id = db.Column(db.Integer, db.ForeignKey("opas.id", ondelete="SET NULL"), nullable=True)
+    emergency_contact_name = db.Column(db.String(120), nullable=True)
+    emergency_contact_phone = db.Column(db.String(40), nullable=True)
+    emergency_contact_relationship = db.Column(db.String(60), nullable=True)
+    # Sensitive: vulnerability/health/allergy notes. Every route reading or
+    # writing this model requires admin/staff (see auth/decorators.py) —
+    # volunteers have no access to elderly records at all, by design.
+    vulnerability_notes = db.Column(db.Text, nullable=True)
+    health_notes = db.Column(db.Text, nullable=True)
+    allergies = db.Column(db.Text, nullable=True)
+    dietary_requirements = db.Column(db.Text, nullable=True)
+    registration_date = db.Column(db.Date, default=lambda: utcnow().date(), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="Active")
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    opa = db.relationship("OPA")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "member_id": self.member_id,
+            "full_name": self.full_name,
+            "date_of_birth": self.date_of_birth.isoformat() if self.date_of_birth else None,
+            "gender": self.gender,
+            "location": self.location,
+            "opa_id": self.opa_id,
+            "opa_name": self.opa.name if self.opa else None,
+            "emergency_contact_name": self.emergency_contact_name,
+            "emergency_contact_phone": self.emergency_contact_phone,
+            "emergency_contact_relationship": self.emergency_contact_relationship,
+            "vulnerability_notes": self.vulnerability_notes,
+            "health_notes": self.health_notes,
+            "allergies": self.allergies,
+            "dietary_requirements": self.dietary_requirements,
+            "registration_date": self.registration_date.isoformat(),
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class Attendance(db.Model):
+    """One row per check-in. check_out_at stays null until the member is
+    checked out; attendance_date is stored separately from check_in_at (not
+    derived) so a day's records are a plain indexed equality filter."""
+
+    __tablename__ = "attendance_records"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    attendance_date = db.Column(db.Date, default=lambda: utcnow().date(), nullable=False, index=True)
+    check_in_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    check_out_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    recorded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "attendance_date": self.attendance_date.isoformat(),
+            "check_in_at": self.check_in_at.isoformat(),
+            "check_out_at": self.check_out_at.isoformat() if self.check_out_at else None,
+            "recorded_by": self.recorded_by.name,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

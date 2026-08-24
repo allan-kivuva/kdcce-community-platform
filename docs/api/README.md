@@ -36,9 +36,11 @@ A `204 No Content` response (deletes) has no body.
 | Module | Doc | Status |
 |---|---|---|
 | Auth | [auth.md](auth.md) | Implemented |
+| Elderly members & OPAs | [elderly.md](elderly.md) | Implemented |
+| Attendance | [attendance.md](attendance.md) | Implemented |
 | Donations | [donations.md](donations.md) | Implemented |
 | Blog | [blog.md](blog.md) | Implemented |
 | Gallery | [gallery.md](gallery.md) | Implemented |
 | Crafts | [crafts.md](crafts.md) | Implemented |
 | Team | [team.md](team.md) | Implemented |
-| Elderly management, attendance, health/wellness, home visits, volunteer management, feeding, incidents, etc. | — | Not built yet — add a doc file here as each module lands |
+| Health/wellness, medication, home visits, volunteer management, feeding, inventory, incidents, notifications | — | Not built yet — add a doc file here as each module lands |
