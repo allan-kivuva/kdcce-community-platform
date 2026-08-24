@@ -458,6 +458,67 @@ class VolunteerProfile(db.Model):
         }
 
 
+HOME_VISIT_PRIORITIES = ("Low", "Medium", "High", "Urgent")
+HOME_VISIT_STATUSES = ("Pending", "Assigned", "Scheduled", "In Progress", "Completed", "Cancelled")
+
+
+class HomeVisit(db.Model):
+    """A visit request for an elderly member who can't (or doesn't) come
+    to the centre. assigned_to is a User — either staff/admin (a
+    caregiver) or a volunteer with a Verified VolunteerProfile; that's
+    checked in the route, not the DB, since it depends on a second table.
+    No strict status state machine — admin/staff can set any status
+    directly, same as every other module's PATCH. The assigned user
+    (staff or a verified volunteer) can update their own visit's outcome
+    fields (status/observations/support_provided/follow-up) but not
+    reassign it or change the elderly member/priority/reason — see the
+    two schemas in this module and the ownership check in routes.py."""
+
+    __tablename__ = "home_visits"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    priority = db.Column(db.String(10), nullable=False, default="Medium")
+    status = db.Column(db.String(20), nullable=False, default="Pending")
+    reason = db.Column(db.Text, nullable=False)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    observations = db.Column(db.Text, nullable=True)
+    support_provided = db.Column(db.Text, nullable=True)
+    follow_up_required = db.Column(db.Boolean, default=False, nullable=False)
+    follow_up_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    requested_by = db.relationship("User", foreign_keys=[requested_by_id])
+    assigned_to = db.relationship("User", foreign_keys=[assigned_to_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "requested_by": self.requested_by.name,
+            "assigned_to_id": self.assigned_to_id,
+            "assigned_to": self.assigned_to.name if self.assigned_to else None,
+            "priority": self.priority,
+            "status": self.status,
+            "reason": self.reason,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "observations": self.observations,
+            "support_provided": self.support_provided,
+            "follow_up_required": self.follow_up_required,
+            "follow_up_notes": self.follow_up_notes,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

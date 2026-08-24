@@ -13,6 +13,8 @@ import HealthManager from './admin/HealthManager'
 import MedicationManager from './admin/MedicationManager'
 import VolunteerManager from './admin/VolunteerManager'
 import MyVolunteerProfile from './admin/MyVolunteerProfile'
+import HomeVisitManager from './admin/HomeVisitManager'
+import MyAssignments from './admin/MyAssignments'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -318,6 +320,8 @@ export default function AdminDashboard() {
       <Route path="medication" element={<MedicationManager showToast={showToast} />} />
       <Route path="volunteers" element={<VolunteerManager showToast={showToast} />} />
       <Route path="profile" element={<MyVolunteerProfile showToast={showToast} />} />
+      <Route path="home-visits" element={<HomeVisitManager showToast={showToast} />} />
+      <Route path="assignments" element={<MyAssignments showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager
         donations={donationsApi.items} loading={donationsApi.loading} error={donationsApi.error} reload={donationsApi.reload}
         addDonation={body => donationsApi.create(body, '/api/donations')}
