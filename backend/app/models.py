@@ -80,7 +80,8 @@ class Donation(db.Model):
     txn_id = db.Column(db.String(60), unique=True, nullable=False)
     receipt_id = db.Column(db.String(60), unique=True, nullable=False)
     message = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    # Indexed for reports/routes.py's date-range/grouped donation queries.
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
     def to_dict(self):
@@ -667,7 +668,8 @@ class StockMovement(db.Model):
     expiry_date = db.Column(db.Date, nullable=True)
     donation_id = db.Column(db.Integer, db.ForeignKey("donations.id"), nullable=True)
     recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    # Indexed for reports/routes.py's date-range/grouped movement queries.
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
     item = db.relationship("InventoryItem")
     donation = db.relationship("Donation")

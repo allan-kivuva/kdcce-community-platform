@@ -47,9 +47,10 @@ A `204 No Content` response (deletes) has no body.
 | Activities | [activities.md](activities.md) | Implemented |
 | Assistance requests | [assistance.md](assistance.md) | Implemented |
 | Incidents | [incidents.md](incidents.md) | Implemented |
+| Reports | [reports.md](reports.md) | Implemented |
 | Donations | [donations.md](donations.md) | Implemented |
 | Blog | [blog.md](blog.md) | Implemented |
 | Gallery | [gallery.md](gallery.md) | Implemented |
 | Crafts | [crafts.md](crafts.md) | Implemented |
 | Team | [team.md](team.md) | Implemented |
-| Clinic/medical visits, notifications | — | Not built yet — add a doc file here as each module lands |
+| Analytics, notifications, real inbox, clinic/medical visits | — | Not built yet — add a doc file here as each module lands |
