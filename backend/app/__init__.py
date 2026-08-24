@@ -31,6 +31,7 @@ def create_app(config_object=Config):
     from .medication.routes import bp as medication_bp
     from .volunteers.routes import bp as volunteers_bp
     from .homevisits.routes import bp as homevisits_bp
+    from .feeding.routes import bp as feeding_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
@@ -45,6 +46,7 @@ def create_app(config_object=Config):
     app.register_blueprint(medication_bp)
     app.register_blueprint(volunteers_bp)
     app.register_blueprint(homevisits_bp)
+    app.register_blueprint(feeding_bp)
 
     from .cli import seed_admin
     app.cli.add_command(seed_admin)

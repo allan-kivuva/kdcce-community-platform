@@ -541,6 +541,74 @@ class HomeVisit(db.Model):
         }
 
 
+MEAL_TYPES = ("Breakfast", "Lunch", "Snack", "Special")
+
+
+class Meal(db.Model):
+    """One meal event on one date — the plan/record, not a per-person log
+    (see MealAttendance for that). Dietary requirements/restrictions are
+    not duplicated here — they already live on ElderlyMember.allergies/
+    dietary_requirements; the frontend surfaces those when marking
+    attendance rather than storing a second copy that could drift."""
+
+    __tablename__ = "meals"
+
+    id = db.Column(db.Integer, primary_key=True)
+    meal_date = db.Column(db.Date, default=lambda: utcnow().date(), nullable=False, index=True)
+    meal_type = db.Column(db.String(20), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    planned_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    planned_by = db.relationship("User")
+
+    def to_dict(self, attendee_count=None):
+        data = {
+            "id": self.id,
+            "meal_date": self.meal_date.isoformat(),
+            "meal_type": self.meal_type,
+            "description": self.description,
+            "planned_by": self.planned_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+        if attendee_count is not None:
+            data["attendee_count"] = attendee_count
+        return data
+
+
+class MealAttendance(db.Model):
+    """Append-only, like the elderly Attendance/MedicationAdministration
+    modules — no edit/delete. A row's existence means the member received
+    (or was offered — see notes) this meal."""
+
+    __tablename__ = "meal_attendance"
+    __table_args__ = (db.UniqueConstraint("meal_id", "elderly_member_id", name="uq_meal_attendance_meal_member"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    meal_id = db.Column(db.Integer, db.ForeignKey("meals.id"), nullable=False, index=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    notes = db.Column(db.Text, nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    recorded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "meal_id": self.meal_id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "notes": self.notes,
+            "recorded_by": self.recorded_by.name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 
