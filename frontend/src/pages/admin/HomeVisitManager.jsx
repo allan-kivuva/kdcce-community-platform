@@ -13,7 +13,7 @@ const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint t
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—' }
 function toLocalInput(iso) { return iso ? new Date(iso).toISOString().slice(0, 16) : '' }
 
-function NewRequestModal({ onClose, onCreated, showToast }) {
+function NewRequestModal({ assignees, onClose, onCreated, showToast }) {
   const [members, setMembers] = useState([])
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
@@ -27,10 +27,11 @@ function NewRequestModal({ onClose, onCreated, showToast }) {
   async function save(e) {
     e.preventDefault()
     const f = new FormData(e.target)
+    const assignedVal = f.get('assigned_to_id')
     setSaving(true)
     try {
-      await onCreated({ elderly_member_id: selected.id, reason: f.get('reason'), priority: f.get('priority') })
-      showToast('Home visit requested')
+      await onCreated({ elderly_member_id: selected.id, reason: f.get('reason'), priority: f.get('priority'), assigned_to_id: assignedVal ? Number(assignedVal) : null })
+      showToast(assignedVal ? 'Home visit requested and assigned' : 'Home visit requested')
       onClose()
     } catch (err) { showToast(errorMessage(err)) }
     finally { setSaving(false) }
@@ -46,7 +47,10 @@ function NewRequestModal({ onClose, onCreated, showToast }) {
     </div> : <form onSubmit={save} className="grid gap-4">
       <div className="rounded-xl bg-kCream p-3 text-sm"><span className="font-semibold text-kInk">{selected.full_name}</span> <span className="text-kMuted">({selected.member_id})</span> <button type="button" onClick={() => setSelected(null)} className="ml-2 text-xs font-semibold text-kOrange">Change</button></div>
       <label className="text-sm font-semibold">Reason for visit<textarea name="reason" rows={3} className="input-k mt-2" required /></label>
-      <label className="text-sm font-semibold">Priority<select name="priority" defaultValue="Medium" className="input-k mt-2">{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select></label>
+      <div className="grid grid-cols-2 gap-4">
+        <label className="text-sm font-semibold">Priority<select name="priority" defaultValue="Medium" className="input-k mt-2">{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select></label>
+        <label className="text-sm font-semibold">Assign to (optional)<select name="assigned_to_id" defaultValue="" className="input-k mt-2"><option value="">Unassigned for now</option>{assignees.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}</select></label>
+      </div>
       <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Creating…' : 'Create request'}</button>
     </form>}
   </Modal>
@@ -131,7 +135,7 @@ export default function HomeVisitManager({ showToast }) {
       </tbody></table></div>
     </div>}
 
-    {newModalOpen && <NewRequestModal onClose={() => setNewModalOpen(false)} onCreated={data => visitsApi.create(data)} showToast={showToast} />}
+    {newModalOpen && <NewRequestModal assignees={assignees} onClose={() => setNewModalOpen(false)} onCreated={data => visitsApi.create(data)} showToast={showToast} />}
     {editVisit && <EditVisitModal visit={editVisit} assignees={assignees} onClose={() => setEditVisit(null)} onSaved={(id, data) => visitsApi.patch(id, data)} showToast={showToast} />}
   </Shell>
 }

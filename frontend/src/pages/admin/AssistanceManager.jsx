@@ -11,7 +11,7 @@ const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
 const STATUSES = ['Requested', 'Matching', 'Assigned', 'Accepted', 'In Progress', 'Completed', 'Cancelled']
 const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
 
-function NewRequestModal({ onClose, onCreated, showToast }) {
+function NewRequestModal({ assignees, onClose, onCreated, showToast }) {
   const [members, setMembers] = useState([])
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
@@ -25,10 +25,11 @@ function NewRequestModal({ onClose, onCreated, showToast }) {
   async function save(e) {
     e.preventDefault()
     const f = new FormData(e.target)
+    const assignedVal = f.get('assigned_to_id')
     setSaving(true)
     try {
-      await onCreated({ elderly_member_id: selected.id, request_type: f.get('request_type'), priority: f.get('priority'), description: f.get('description') })
-      showToast('Assistance request created')
+      await onCreated({ elderly_member_id: selected.id, request_type: f.get('request_type'), priority: f.get('priority'), description: f.get('description'), assigned_to_id: assignedVal ? Number(assignedVal) : null })
+      showToast(assignedVal ? 'Assistance request created and assigned' : 'Assistance request created')
       onClose()
     } catch (err) { showToast(errorMessage(err)) }
     finally { setSaving(false) }
@@ -48,6 +49,7 @@ function NewRequestModal({ onClose, onCreated, showToast }) {
         <label className="text-sm font-semibold">Priority<select name="priority" defaultValue="Medium" className="input-k mt-2">{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select></label>
       </div>
       <label className="text-sm font-semibold">Description<textarea name="description" rows={3} className="input-k mt-2" required /></label>
+      <label className="text-sm font-semibold">Assign to (optional)<select name="assigned_to_id" defaultValue="" className="input-k mt-2"><option value="">Unassigned for now</option>{assignees.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}</select></label>
       <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Creating…' : 'Create request'}</button>
     </form>}
   </Modal>
@@ -120,7 +122,7 @@ export default function AssistanceManager({ showToast }) {
       </tbody></table></div>
     </div>}
 
-    {newModalOpen && <NewRequestModal onClose={() => setNewModalOpen(false)} onCreated={data => requestsApi.create(data)} showToast={showToast} />}
+    {newModalOpen && <NewRequestModal assignees={assignees} onClose={() => setNewModalOpen(false)} onCreated={data => requestsApi.create(data)} showToast={showToast} />}
     {editReq && <EditRequestModal req={editReq} assignees={assignees} onClose={() => setEditReq(null)} onSaved={(id, data) => requestsApi.patch(id, data)} showToast={showToast} />}
   </Shell>
 }
