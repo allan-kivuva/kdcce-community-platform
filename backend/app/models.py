@@ -836,6 +836,64 @@ class AssistanceRequest(db.Model):
         }
 
 
+INCIDENT_TYPES = ("Fall", "Injury", "Medical Concern", "Accident", "Safeguarding Concern", "Other")
+INCIDENT_STATUSES = ("Open", "Under Review", "Resolved", "Closed")
+
+
+class Incident(db.Model):
+    """No DELETE endpoint, ever — a safeguarding/incident record is
+    treated as a permanent record (real safeguarding practice: retain,
+    don't erase), same append-only principle as the stock/administration
+    ledgers, just applied to the whole record rather than a sub-log.
+    Access is admin/staff only, no volunteer visibility at all — matching
+    the brief's own role breakdown, where only Caregiver/Staff (not
+    Volunteer) has "create incident reports" as a listed capability."""
+
+    __tablename__ = "incidents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    reported_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    incident_type = db.Column(db.String(30), nullable=False)
+    occurred_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    location = db.Column(db.String(150), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    immediate_action_taken = db.Column(db.Text, nullable=True)
+    emergency_contact_notified = db.Column(db.Boolean, default=False, nullable=False)
+    emergency_contact_notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    follow_up_required = db.Column(db.Boolean, default=False, nullable=False)
+    follow_up_notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Open")
+    resolution_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    reported_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "reported_by": self.reported_by.name,
+            "incident_type": self.incident_type,
+            "occurred_at": self.occurred_at.isoformat(),
+            "location": self.location,
+            "description": self.description,
+            "immediate_action_taken": self.immediate_action_taken,
+            "emergency_contact_notified": self.emergency_contact_notified,
+            "emergency_contact_notified_at": self.emergency_contact_notified_at.isoformat() if self.emergency_contact_notified_at else None,
+            "follow_up_required": self.follow_up_required,
+            "follow_up_notes": self.follow_up_notes,
+            "status": self.status,
+            "resolution_notes": self.resolution_notes,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

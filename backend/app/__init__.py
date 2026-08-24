@@ -35,6 +35,7 @@ def create_app(config_object=Config):
     from .inventory.routes import bp as inventory_bp
     from .activities.routes import bp as activities_bp
     from .assistance.routes import bp as assistance_bp
+    from .incidents.routes import bp as incidents_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
@@ -53,6 +54,7 @@ def create_app(config_object=Config):
     app.register_blueprint(inventory_bp)
     app.register_blueprint(activities_bp)
     app.register_blueprint(assistance_bp)
+    app.register_blueprint(incidents_bp)
 
     from .cli import seed_admin
     app.cli.add_command(seed_admin)
