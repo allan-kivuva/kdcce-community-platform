@@ -687,6 +687,91 @@ class StockMovement(db.Model):
         }
 
 
+ACTIVITY_TYPES = ("Exercise", "Walking", "Games", "Social", "Intergenerational", "Skills Training", "Educational", "Community Event", "Other")
+ACTIVITY_STATUSES = ("Scheduled", "In Progress", "Completed", "Cancelled")
+ACTIVITY_PARTICIPANT_STATUSES = ("Registered", "Attended", "No-show", "Cancelled")
+
+
+class Activity(db.Model):
+    """facilitator_id is validated the same way HomeVisit.assigned_to_id
+    is (staff/admin or a Verified volunteer only — see
+    app/activities/routes.py) since facilitating means direct contact
+    with elderly members, same sensitivity as a home visit."""
+
+    __tablename__ = "activities"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    activity_type = db.Column(db.String(30), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    location = db.Column(db.String(150), nullable=True)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    facilitator_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Scheduled")
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    facilitator = db.relationship("User", foreign_keys=[facilitator_id])
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    def to_dict(self, participant_count=None):
+        data = {
+            "id": self.id,
+            "title": self.title,
+            "activity_type": self.activity_type,
+            "description": self.description,
+            "location": self.location,
+            "scheduled_at": self.scheduled_at.isoformat(),
+            "facilitator_id": self.facilitator_id,
+            "facilitator": self.facilitator.name if self.facilitator else None,
+            "status": self.status,
+            "created_by": self.created_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+        if participant_count is not None:
+            data["participant_count"] = participant_count
+        return data
+
+
+class ActivityParticipant(db.Model):
+    """One row per elderly member per activity, carrying its own lifecycle
+    (Registered -> Attended/No-show/Cancelled) rather than two separate
+    registration and attendance tables — registering ahead of time and
+    marking attendance afterward are the same relationship at different
+    points in time, not two different facts."""
+
+    __tablename__ = "activity_participants"
+    __table_args__ = (db.UniqueConstraint("activity_id", "elderly_member_id", name="uq_activity_participant_activity_member"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=False, index=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="Registered")
+    notes = db.Column(db.Text, nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    recorded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "activity_id": self.activity_id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "status": self.status,
+            "notes": self.notes,
+            "recorded_by": self.recorded_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

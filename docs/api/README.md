@@ -44,9 +44,10 @@ A `204 No Content` response (deletes) has no body.
 | Home visits | [home-visits.md](home-visits.md) | Implemented |
 | Feeding | [feeding.md](feeding.md) | Implemented |
 | Inventory | [inventory.md](inventory.md) | Implemented |
+| Activities | [activities.md](activities.md) | Implemented |
 | Donations | [donations.md](donations.md) | Implemented |
 | Blog | [blog.md](blog.md) | Implemented |
 | Gallery | [gallery.md](gallery.md) | Implemented |
 | Crafts | [crafts.md](crafts.md) | Implemented |
 | Team | [team.md](team.md) | Implemented |
-| Clinic/medical visits, incidents, notifications | — | Not built yet — add a doc file here as each module lands |
+| Assistance requests, incidents, clinic/medical visits, notifications | — | Not built yet — add a doc file here as each module lands |
