@@ -37,27 +37,45 @@ class User(db.Model):
         }
 
 
-DONATION_STATUSES = ("Paid", "Pending")
+DONATION_STATUSES = ("Paid", "Pending", "Received")
 DONATION_FREQUENCIES = ("one-time", "monthly")
+DONATION_TYPES = ("Cash", "Food", "Equipment")
 
 
 class Donation(db.Model):
     __tablename__ = "donations"
 
     id = db.Column(db.Integer, primary_key=True)
+    # Cash (the original, public-facing shape) vs Food/Equipment (staff-
+    # logged in-kind gifts — see app/donations/routes.py's
+    # create_admin_donation). server_default backfills existing rows to
+    # 'Cash' when this column was added by migration.
+    donation_type = db.Column(db.String(20), nullable=False, default="Cash", server_default="Cash")
     donor_name = db.Column(db.String(120), nullable=False)
-    donor_email = db.Column(db.String(255), nullable=False)
+    # Nullable at the DB level (an in-person in-kind donor may not leave
+    # contact info) but still required=True in DonationCreateSchema for
+    # the public Cash flow — the column is looser than the public API.
+    donor_email = db.Column(db.String(255), nullable=True)
     donor_phone = db.Column(db.String(40), nullable=True)
-    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    # Required for Cash (a payment amount); for Food/Equipment this is an
+    # optional estimated value, not a payment — same column, no separate
+    # "estimated_value" field, since both mean "value of this gift."
+    amount = db.Column(db.Numeric(10, 2), nullable=True)
     currency = db.Column(db.String(8), nullable=False, default="KES")
     frequency = db.Column(db.String(20), nullable=False, default="one-time")
+    # Doubles as "purpose/category" for every donation type, not just Cash.
     campaign = db.Column(db.String(120), nullable=True)
     payment_method = db.Column(db.String(40), nullable=True)
+    # Food/Equipment only: what was given, how much, in what unit.
+    item_description = db.Column(db.Text, nullable=True)
+    quantity = db.Column(db.Numeric(10, 2), nullable=True)
+    unit = db.Column(db.String(30), nullable=True)
     # NOTE: no real payment gateway is integrated in this project. "status"
     # is a workflow label the org uses internally, never a verified payment
     # confirmation. It is always server-set on creation (never taken from
     # the public-facing create request) and can only be changed afterward
-    # by an authenticated admin/staff edit. See docs/donations.md.
+    # by an authenticated admin/staff edit. Cash defaults to "Paid";
+    # Food/Equipment default to "Received" (see docs/api/donations.md).
     status = db.Column(db.String(20), nullable=False, default="Paid")
     txn_id = db.Column(db.String(60), unique=True, nullable=False)
     receipt_id = db.Column(db.String(60), unique=True, nullable=False)
@@ -68,14 +86,18 @@ class Donation(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "donation_type": self.donation_type,
             "donor_name": self.donor_name,
             "donor_email": self.donor_email,
             "donor_phone": self.donor_phone,
-            "amount": float(self.amount),
+            "amount": float(self.amount) if self.amount is not None else None,
             "currency": self.currency,
             "frequency": self.frequency,
             "campaign": self.campaign,
             "payment_method": self.payment_method,
+            "item_description": self.item_description,
+            "quantity": float(self.quantity) if self.quantity is not None else None,
+            "unit": self.unit,
             "status": self.status,
             "txn_id": self.txn_id,
             "receipt_id": self.receipt_id,

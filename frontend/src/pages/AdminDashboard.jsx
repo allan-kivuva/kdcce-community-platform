@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Routes, Route, Link } from 'react-router-dom'
-import { BarChart3, Search, Plus, Trash2, Pencil, Download, ChevronDown, Mail, MailOpen, Reply, Settings } from 'lucide-react'
+import { BarChart3, Search, Plus, Trash2, Pencil, ChevronDown, Mail, MailOpen, Reply, Settings } from 'lucide-react'
 import Modal from '../components/admin/Modal'
 import Toast from '../components/admin/Toast'
 import Shell from '../components/admin/Shell'
 import { useToast, errorMessage, LoadingState, ErrorState } from '../components/admin/adminHelpers'
-import { downloadFile } from '../lib/api'
 import { useApiResource } from '../lib/useApiResource'
 import ElderlyManager from './admin/ElderlyManager'
 import AttendanceManager from './admin/AttendanceManager'
@@ -15,6 +14,7 @@ import VolunteerManager from './admin/VolunteerManager'
 import MyVolunteerProfile from './admin/MyVolunteerProfile'
 import HomeVisitManager from './admin/HomeVisitManager'
 import MyAssignments from './admin/MyAssignments'
+import DonationsManager from './admin/DonationsManager'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -51,66 +51,6 @@ function Overview({ donations, blogPosts, crafts }) {
       <div className="card-k p-6"><div className="flex items-center justify-between"><h2 className="font-display text-xl font-bold text-kGreen">Recent donations</h2><Link to="/admin/donations" className="text-sm font-semibold text-kOrange">View all</Link></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="border-b border-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="pb-3">Donor</th><th>Amount</th><th>Frequency</th><th>Status</th><th>Date</th></tr></thead><tbody>{recent.map(r => <tr key={r.id} className="border-b border-kBorderSoft"><td className="py-4 font-semibold text-kInk">{r.donor_name}</td><td className="text-kMuted">KES {Number(r.amount).toLocaleString()}</td><td className="text-kMuted">{frequencyLabel(r.frequency)}</td><td className="text-kMuted">{r.status}</td><td className="text-kMuted">{r.created_at.slice(0, 10)}</td></tr>)}</tbody></table></div></div>
       <div className="card-k p-6"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-kTint text-kOrange"><BarChart3 /></div><div><h2 className="font-display text-xl font-bold text-kGreen">Impact pulse</h2><p className="text-sm text-kMuted">Donations this week</p></div></div><div className="mt-8 flex h-36 items-end justify-between gap-3">{[42, 66, 49, 80, 58, 72, 91].map((v, i) => <div key={i} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-lg bg-kOrange/75" style={{ height: `${v}%` }} /><span className="text-[10px] text-kMuted">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}</span></div>)}</div></div>
     </div>
-  </Shell>
-}
-
-function DonationsManager({ donations, loading, error, reload, patchDonation, addDonation, showToast }) {
-  const [q, setQ] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
-  const [modal, setModal] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const filtered = donations.filter(d => (statusFilter === 'All' || d.status === statusFilter) && (d.donor_name.toLowerCase().includes(q.toLowerCase()) || d.donor_email.toLowerCase().includes(q.toLowerCase())))
-
-  async function save(e) {
-    e.preventDefault()
-    const f = new FormData(e.target)
-    setSaving(true)
-    try {
-      if (modal.data) {
-        await patchDonation(modal.data.id, {
-          donor_name: f.get('donor'), donor_email: f.get('email'),
-          amount: Number(f.get('amount')), frequency: f.get('frequency'), status: f.get('status')
-        })
-        showToast('Donation updated')
-      } else {
-        await addDonation({
-          donor_name: f.get('donor'), donor_email: f.get('email'),
-          amount: Number(f.get('amount')), frequency: f.get('frequency')
-        })
-        showToast('Donation added')
-      }
-      setModal(null)
-    } catch (err) {
-      showToast(errorMessage(err))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function downloadCsvExport() {
-    try { await downloadFile('/api/donations/export.csv', 'donations.csv') }
-    catch (err) { showToast(errorMessage(err)) }
-  }
-
-  return <Shell>
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><div className="eyebrow">Manage</div><h1 className="font-display text-3xl font-bold text-kGreen">Donations manager</h1></div><div className="flex gap-2"><button onClick={() => setModal({})} className="btn-green"><Plus size={16} /> Add new</button><button onClick={downloadCsvExport} className="btn-orange"><Download size={16} /> CSV</button></div></div>
-    {loading ? <LoadingState label="donations" /> : error ? <ErrorState message={error} onRetry={reload} /> : <div className="card-k mt-7 overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-kBorderSoft p-5 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3.5 text-kMuted" size={17} /><input value={q} onChange={e => setQ(e.target.value)} className="input-k pl-10" placeholder="Search donor or email..." /></div><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-xl border border-kBorder bg-kSurface px-4 py-3 text-sm text-kInk"><option>All</option><option>Paid</option><option>Pending</option></select></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-4">Donor</th><th className="px-5 py-4">Email</th><th className="px-5 py-4">Amount</th><th className="px-5 py-4">Frequency</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>
-        {filtered.map(d => <tr key={d.id} className="border-b border-kBorderSoft"><td className="px-5 py-4 font-semibold text-kInk">{d.donor_name}</td><td className="px-5 py-4 text-kMuted">{d.donor_email}</td><td className="px-5 py-4 text-kMuted">KES {Number(d.amount).toLocaleString()}</td><td className="px-5 py-4 text-kMuted">{frequencyLabel(d.frequency)}</td><td className="px-5 py-4 text-kMuted">{d.status}</td><td className="px-5 py-4"><button onClick={() => setModal({ data: d })} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
-        {filtered.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-kMuted">No donations match your search.</td></tr>}
-      </tbody></table></div>
-    </div>}
-    {modal && <Modal title={modal.data ? 'Edit donation' : 'Add donation'} onClose={() => setModal(null)}>
-      <form onSubmit={save} className="grid gap-4">
-        <label className="text-sm font-semibold">Donor name<input name="donor" defaultValue={modal.data?.donor_name} className="input-k mt-2" required /></label>
-        <label className="text-sm font-semibold">Email<input name="email" type="email" defaultValue={modal.data?.donor_email} className="input-k mt-2" required /></label>
-        <label className="text-sm font-semibold">Amount (KES)<input name="amount" type="number" min="1" defaultValue={modal.data?.amount} className="input-k mt-2" required /></label>
-        <label className="text-sm font-semibold">Frequency<select name="frequency" defaultValue={modal.data?.frequency || 'one-time'} className="input-k mt-2"><option value="one-time">One-time</option><option value="monthly">Monthly</option></select></label>
-        <label className="text-sm font-semibold">Status<select name="status" defaultValue={modal.data?.status || 'Paid'} className="input-k mt-2"><option>Paid</option><option>Pending</option></select></label>
-        <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Saving…' : modal.data ? 'Save changes' : 'Add donation'}</button>
-      </form>
-    </Modal>}
   </Shell>
 }
 
@@ -322,11 +262,7 @@ export default function AdminDashboard() {
       <Route path="profile" element={<MyVolunteerProfile showToast={showToast} />} />
       <Route path="home-visits" element={<HomeVisitManager showToast={showToast} />} />
       <Route path="assignments" element={<MyAssignments showToast={showToast} />} />
-      <Route path="donations" element={<DonationsManager
-        donations={donationsApi.items} loading={donationsApi.loading} error={donationsApi.error} reload={donationsApi.reload}
-        addDonation={body => donationsApi.create(body, '/api/donations')}
-        patchDonation={(id, body) => donationsApi.patch(id, body, '/api/donations')}
-        showToast={showToast} />} />
+      <Route path="donations" element={<DonationsManager showToast={showToast} />} />
       <Route path="blog" element={<BlogManager
         posts={blogApi.items} loading={blogApi.loading} error={blogApi.error} reload={blogApi.reload}
         addPost={blogApi.create} patchPost={blogApi.patch} deletePost={blogApi.remove} showToast={showToast} />} />

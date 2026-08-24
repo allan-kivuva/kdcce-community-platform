@@ -20,7 +20,7 @@ def create_app(config_object=Config):
 
     from . import models  # noqa: F401 -- register models with SQLAlchemy metadata
     from .auth.routes import bp as auth_bp
-    from .donations.routes import bp as donations_bp
+    from .donations.routes import bp as donations_bp, admin_bp as admin_donations_bp
     from .blog.routes import bp as blog_bp
     from .gallery.routes import bp as gallery_bp
     from .crafts.routes import bp as crafts_bp
@@ -34,6 +34,7 @@ def create_app(config_object=Config):
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
+    app.register_blueprint(admin_donations_bp)
     app.register_blueprint(blog_bp)
     app.register_blueprint(gallery_bp)
     app.register_blueprint(crafts_bp)

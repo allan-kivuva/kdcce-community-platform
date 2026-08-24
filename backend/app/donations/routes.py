@@ -8,16 +8,31 @@ from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import Donation
 from ..utils import get_or_404, validation_error_response, csv_response
-from .schemas import DonationCreateSchema, DonationUpdateSchema
+from .schemas import AdminDonationCreateSchema, DonationCreateSchema, DonationUpdateSchema
 
 bp = Blueprint("donations", __name__, url_prefix="/api/donations")
+# Separate blueprint (not nested under /api/donations) so this endpoint's
+# path can live at /api/admin/donations, matching the existing
+# /api/admin/<module> convention used by blog/gallery/team/crafts for
+# staff-only writes — without touching any of bp's existing route paths.
+admin_bp = Blueprint("admin_donations", __name__, url_prefix="/api/admin/donations")
 
 create_schema = DonationCreateSchema()
+admin_create_schema = AdminDonationCreateSchema()
 update_schema = DonationUpdateSchema()
 
 
 def _make_txn_id():
     return f"TXN-{secrets.token_hex(6).upper()}"
+
+
+def _assign_receipt_and_commit(donation):
+    db.session.add(donation)
+    db.session.flush()  # assigns donation.id without committing yet
+    year = datetime.now(timezone.utc).year
+    donation.receipt_id = f"KDCCE-{year}-{str(donation.id).zfill(6)}"
+    donation.txn_id = _make_txn_id()
+    db.session.commit()
 
 
 @bp.post("")
@@ -33,6 +48,7 @@ def create_donation():
         return validation_error_response(err)
 
     donation = Donation(
+        donation_type="Cash",
         donor_name=data["donor_name"].strip(),
         donor_email=data["donor_email"].lower(),
         donor_phone=data.get("donor_phone"),
@@ -46,21 +62,53 @@ def create_donation():
         txn_id="",
         receipt_id="",
     )
-    db.session.add(donation)
-    db.session.flush()  # assigns donation.id without committing yet
+    _assign_receipt_and_commit(donation)
+    return jsonify(donation=donation.to_dict()), 201
 
-    year = datetime.now(timezone.utc).year
-    donation.receipt_id = f"KDCCE-{year}-{str(donation.id).zfill(6)}"
-    donation.txn_id = _make_txn_id()
-    db.session.commit()
 
+@admin_bp.post("")
+@roles_required("admin", "staff")
+def create_admin_donation():
+    """Staff/admin logging a donation received in person — any type. This
+    is the only way a Food/Equipment donation gets created; there is no
+    public in-kind form."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = admin_create_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    is_cash = data["donation_type"] == "Cash"
+    donation = Donation(
+        donation_type=data["donation_type"],
+        donor_name=data["donor_name"].strip(),
+        donor_email=(data.get("donor_email") or "").lower() or None,
+        donor_phone=data.get("donor_phone"),
+        amount=data.get("amount"),
+        currency=data.get("currency") or "KES",
+        frequency="one-time",
+        campaign=data.get("campaign"),
+        payment_method=data.get("payment_method") if is_cash else None,
+        item_description=data.get("item_description"),
+        quantity=data.get("quantity"),
+        unit=data.get("unit"),
+        status="Paid" if is_cash else "Received",
+        message=data.get("message"),
+        txn_id="",
+        receipt_id="",
+    )
+    _assign_receipt_and_commit(donation)
     return jsonify(donation=donation.to_dict()), 201
 
 
 @bp.get("")
 @roles_required("admin", "staff")
 def list_donations():
-    donations = Donation.query.order_by(Donation.created_at.desc()).all()
+    query = Donation.query
+    donation_type = request.args.get("donation_type")
+    if donation_type:
+        query = query.filter(Donation.donation_type == donation_type)
+    donations = query.order_by(Donation.created_at.desc()).all()
     return jsonify(donations=[d.to_dict() for d in donations]), 200
 
 
@@ -68,12 +116,17 @@ def list_donations():
 @roles_required("admin", "staff")
 def export_donations_csv():
     donations = Donation.query.order_by(Donation.created_at.desc()).all()
-    headers = ["Donor", "Email", "Amount", "Currency", "Frequency", "Campaign", "Payment Method", "Status", "Transaction ID", "Receipt ID", "Date"]
+    headers = [
+        "Donor", "Email", "Amount", "Currency", "Frequency", "Campaign", "Payment Method",
+        "Status", "Transaction ID", "Receipt ID", "Date",
+        "Type", "Item Description", "Quantity", "Unit",
+    ]
     rows = [
         [
-            d.donor_name, d.donor_email, float(d.amount), d.currency, d.frequency,
+            d.donor_name, d.donor_email or "", float(d.amount) if d.amount is not None else "", d.currency, d.frequency,
             d.campaign or "", d.payment_method or "", d.status, d.txn_id, d.receipt_id,
             d.created_at.isoformat(),
+            d.donation_type, d.item_description or "", float(d.quantity) if d.quantity is not None else "", d.unit or "",
         ]
         for d in donations
     ]
