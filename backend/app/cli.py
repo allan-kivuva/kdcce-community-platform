@@ -154,10 +154,14 @@ def seed_demo():
         elders.append(member)
 
     new_assignments = 0
+    visits_by_volunteer = {}
     for i, (user, _profile) in enumerate(volunteers):
-        for elder in elders[i * 4:(i + 1) * 4]:
+        chunk = elders[i * 4:(i + 1) * 4]
+        volunteer_visits = []
+        for elder in chunk:
             existing = HomeVisit.query.filter_by(elderly_member_id=elder.id, assigned_to_id=user.id).first()
             if existing is not None:
+                volunteer_visits.append(existing)
                 continue
             visit = HomeVisit(
                 elderly_member_id=elder.id, assigned_to_id=user.id, requested_by_id=admin_or_staff.id,
@@ -171,6 +175,88 @@ def seed_demo():
                 related_resource_type="home_visit", related_resource_id=visit.id,
             )
             new_assignments += 1
+            volunteer_visits.append(visit)
+        visits_by_volunteer[user.id] = volunteer_visits
+
+    activity_summary = _seed_demo_activity(admin_or_staff, volunteers, elders, visits_by_volunteer)
 
     db.session.commit()
-    click.echo(f"Demo seed complete: {len(volunteers)} volunteers, {len(elders)} elderly members, {new_assignments} new assignment(s) created this run.")
+    click.echo(
+        f"Demo seed complete: {len(volunteers)} volunteers, {len(elders)} elderly members, "
+        f"{new_assignments} new assignment(s) created this run. {activity_summary}"
+    )
+
+
+def _seed_demo_activity(admin_or_staff, volunteers, elders, visits_by_volunteer):
+    """A small amount of realistic activity layered on top of the base
+    seed above, so the demo isn't just 20 identical "Assigned, nothing
+    happened yet" rows. Every insert here is guarded the same way as the
+    rest of this command — a fixed, distinctive marker string checked
+    before creating, so re-running never duplicates it."""
+    from .followups.service import create_from_source
+    from .models import AssistanceRequest, HealthRecord, Incident, Medication, MedicationAdministration
+
+    marker_note = "[demo seed]"
+    created = []
+
+    # Two completed home visits, with observations — the first assignment
+    # of the first two volunteers.
+    completed_visits = 0
+    for user, _profile in volunteers[:2]:
+        visits = visits_by_volunteer.get(user.id) or []
+        if not visits:
+            continue
+        visit = visits[0]
+        if visit.status != "Completed" and marker_note not in (visit.observations or ""):
+            visit.status = "Completed"
+            visit.observations = f"{marker_note} Visit went well, member in good spirits."
+            visit.support_provided = "Companionship and a wellbeing check."
+            visit.completed_at = utcnow()
+            completed_visits += 1
+    if completed_visits:
+        created.append(f"{completed_visits} completed home visit(s)")
+
+    # One health observation with a follow-up (mirrors what the health
+    # module's own create-hook does — this is the CLI, not that route, so
+    # it calls the same shared create_from_source() explicitly).
+    if elders and not HealthRecord.query.filter(HealthRecord.observations.like(f"%{marker_note}%")).first():
+        record = HealthRecord(
+            elderly_member_id=elders[0].id, mood="Fair", wellbeing="Fair",
+            observations=f"{marker_note} Reports mild joint pain, otherwise stable.",
+            follow_up_required=True, follow_up_notes="Arrange a physiotherapy check-in.",
+            recorded_by_id=admin_or_staff.id,
+        )
+        db.session.add(record)
+        db.session.flush()
+        create_from_source(elders[0].id, "health_record", record.id, record.follow_up_notes, admin_or_staff.id)
+        created.append("1 health observation with follow-up")
+
+    # One medication + one administration.
+    if len(elders) > 1 and not Medication.query.filter_by(elderly_member_id=elders[1].id, name="Amlodipine").first():
+        medication = Medication(
+            elderly_member_id=elders[1].id, name="Amlodipine", dosage="5mg", schedule="Once daily, morning",
+            instructions="Take with food.", created_by_id=admin_or_staff.id,
+        )
+        db.session.add(medication)
+        db.session.flush()
+        db.session.add(MedicationAdministration(medication_id=medication.id, status="Given", administered_by_id=admin_or_staff.id, notes=marker_note))
+        created.append("1 medication + administration")
+
+    # One assistance request, unassigned — a realistic "needs triage" row.
+    if len(elders) > 2 and not AssistanceRequest.query.filter(AssistanceRequest.description.like(f"%{marker_note}%")).first():
+        db.session.add(AssistanceRequest(
+            elderly_member_id=elders[2].id, requested_by_id=admin_or_staff.id, request_type="Transportation",
+            priority="Medium", status="Requested", description=f"{marker_note} Needs transport to a clinic appointment next week.",
+        ))
+        created.append("1 assistance request")
+
+    # One incident — Medium severity on purpose (not Critical), so a
+    # routine demo seed run doesn't page every admin/staff by default.
+    if len(elders) > 3 and not Incident.query.filter(Incident.description.like(f"%{marker_note}%")).first():
+        db.session.add(Incident(
+            elderly_member_id=elders[3].id, reported_by_id=admin_or_staff.id, incident_type="Fall", severity="Medium",
+            occurred_at=utcnow(), location="Dining hall", description=f"{marker_note} Minor stumble, no injury; monitored afterwards.",
+        ))
+        created.append("1 incident")
+
+    return ("Added: " + ", ".join(created) + ".") if created else "No new demo activity to add (already seeded)."

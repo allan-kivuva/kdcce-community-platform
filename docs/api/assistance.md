@@ -33,6 +33,7 @@ Request object:
   "request_type": "Companionship", "priority": "Medium", "status": "Accepted",
   "description": "Would like a weekly visitor",
   "scheduled_at": null, "completed_at": null, "outcome_notes": null,
+  "follow_up_required": false, "follow_up_notes": null,
   "created_at": "...", "updated_at": "..."
 }
 ```
@@ -42,6 +43,13 @@ Request object:
 Progress | Completed | Cancelled` — no enforced transitions between these
 (same as every other lifecycle module) except `Accepted`, which is only
 reachable via the accept endpoint below.
+
+`follow_up_required`/`follow_up_notes` — added alongside `HealthRecord`,
+`HomeVisit`, and `Incident`'s identical pair, so an assistance request can
+originate a follow-up the same way those 3 already could. **`true`
+auto-creates a [FollowUp](followups.md)** (defaulting `assigned_to_id` to
+this request's own assignee, if any) on a `False → True` `PATCH`. Not
+settable at creation.
 
 ## POST /api/assistance-requests
 
@@ -74,8 +82,8 @@ reachable via the accept endpoint below.
 
 ## PATCH /api/assistance-requests/{id}
 
-- **`admin`/`staff`:** any subset of `elderly_member_id`, `assigned_to_id`, `home_visit_id`, `request_type`, `priority`, `status`, `description`, `scheduled_at`, `outcome_notes`.
-- **The assigned volunteer/staff member on their own request:** only `status` (restricted to `In Progress | Completed | Cancelled` — not `Accepted`, not the staff-only states) and `outcome_notes`. Sending anything else, including `status: "Accepted"`, is rejected as invalid/unknown (`400`).
+- **`admin`/`staff`:** any subset of `elderly_member_id`, `assigned_to_id`, `home_visit_id`, `request_type`, `priority`, `status`, `description`, `scheduled_at`, `outcome_notes`, `follow_up_required`, `follow_up_notes`.
+- **The assigned volunteer/staff member on their own request:** only `status` (restricted to `In Progress | Completed | Cancelled` — not `Accepted`, not the staff-only states), `outcome_notes`, `follow_up_required`, `follow_up_notes`. Sending anything else, including `status: "Accepted"`, is rejected as invalid/unknown (`400`).
 - **Anyone else:** `403`.
 - Omitted fields are left unchanged, never reset. Setting `status` to `Completed` stamps `completed_at` the first time it happens.
 - **Errors:** `400`, `403`, `404`.

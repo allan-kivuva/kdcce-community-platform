@@ -172,3 +172,72 @@ def test_incidents_have_no_delete_endpoint(client, make_staff_user, auth_header)
 
     resp = client.delete(f"/api/incidents/{incident['id']}", headers=auth_header(token))
     assert resp.status_code == 405  # method not allowed — no route exists for it, even for admin
+
+
+# ---------- Severity ----------
+
+def test_severity_defaults_to_medium(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(token))
+    assert resp.get_json()["incident"]["severity"] == "Medium"
+
+
+def test_severity_persists_across_partial_edit(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    incident = client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "High", **VALID}, headers=auth_header(token)).get_json()["incident"]
+
+    patched = client.patch(f"/api/incidents/{incident['id']}", json={"status": "Under Review"}, headers=auth_header(token))
+    assert patched.get_json()["incident"]["severity"] == "High"
+
+
+def test_rejects_invalid_severity(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "Catastrophic", **VALID}, headers=auth_header(token))
+    assert resp.status_code == 400
+
+
+# ---------- Critical incident notifications ----------
+
+def test_critical_incident_notifies_every_admin_and_staff(client, make_staff_user, auth_header):
+    admin_user, admin_token = make_staff_user("admin")
+    staff_user, staff_token = make_staff_user("staff", email="critical-staff@example.com")
+    member = _register_member(client, admin_token, auth_header)
+
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "Critical", **VALID}, headers=auth_header(admin_token))
+    assert resp.status_code == 201
+
+    for token in (admin_token, staff_token):
+        notifications = client.get("/api/notifications?notification_type=Critical%20Incident", headers=auth_header(token)).get_json()["notifications"]
+        assert len(notifications) == 1
+
+
+def test_non_critical_incident_does_not_notify(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "Low", **VALID}, headers=auth_header(admin_token))
+
+    notifications = client.get("/api/notifications?notification_type=Critical%20Incident", headers=auth_header(admin_token)).get_json()["notifications"]
+    assert notifications == []
+
+
+def test_escalating_to_critical_via_patch_notifies(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    incident = client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "Medium", **VALID}, headers=auth_header(admin_token)).get_json()["incident"]
+
+    client.patch(f"/api/incidents/{incident['id']}", json={"severity": "Critical"}, headers=auth_header(admin_token))
+    notifications = client.get("/api/notifications?notification_type=Critical%20Incident", headers=auth_header(admin_token)).get_json()["notifications"]
+    assert len(notifications) == 1
+
+
+def test_resaving_already_critical_does_not_renotify(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    incident = client.post("/api/incidents", json={"elderly_member_id": member["id"], "severity": "Critical", **VALID}, headers=auth_header(admin_token)).get_json()["incident"]
+
+    client.patch(f"/api/incidents/{incident['id']}", json={"severity": "Critical", "status": "Under Review"}, headers=auth_header(admin_token))
+    notifications = client.get("/api/notifications?notification_type=Critical%20Incident", headers=auth_header(admin_token)).get_json()["notifications"]
+    assert len(notifications) == 1

@@ -819,6 +819,8 @@ class AssistanceRequest(db.Model):
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     outcome_notes = db.Column(db.Text, nullable=True)
+    follow_up_required = db.Column(db.Boolean, default=False, nullable=False)
+    follow_up_notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -844,6 +846,8 @@ class AssistanceRequest(db.Model):
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "outcome_notes": self.outcome_notes,
+            "follow_up_required": self.follow_up_required,
+            "follow_up_notes": self.follow_up_notes,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -851,6 +855,7 @@ class AssistanceRequest(db.Model):
 
 INCIDENT_TYPES = ("Fall", "Injury", "Medical Concern", "Accident", "Safeguarding Concern", "Other")
 INCIDENT_STATUSES = ("Open", "Under Review", "Resolved", "Closed")
+INCIDENT_SEVERITIES = ("Low", "Medium", "High", "Critical")
 
 
 class Incident(db.Model):
@@ -860,7 +865,12 @@ class Incident(db.Model):
     ledgers, just applied to the whole record rather than a sub-log.
     Access is admin/staff only, no volunteer visibility at all — matching
     the brief's own role breakdown, where only Caregiver/Staff (not
-    Volunteer) has "create incident reports" as a listed capability."""
+    Volunteer) has "create incident reports" as a listed capability.
+
+    severity defaults to Medium (not nullable) — every incident needs a
+    triage level, unlike the optional fields below it. A Critical severity
+    fires a notification to every admin/staff on creation (see routes.py)
+    via the existing notify() chokepoint — no second notification path."""
 
     __tablename__ = "incidents"
 
@@ -868,6 +878,7 @@ class Incident(db.Model):
     elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
     reported_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     incident_type = db.Column(db.String(30), nullable=False)
+    severity = db.Column(db.String(10), nullable=False, default="Medium")
     occurred_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     location = db.Column(db.String(150), nullable=True)
     description = db.Column(db.Text, nullable=False)
@@ -892,6 +903,7 @@ class Incident(db.Model):
             "elderly_member_code": self.elderly_member.member_id,
             "reported_by": self.reported_by.name,
             "incident_type": self.incident_type,
+            "severity": self.severity,
             "occurred_at": self.occurred_at.isoformat(),
             "location": self.location,
             "description": self.description,
@@ -907,10 +919,84 @@ class Incident(db.Model):
         }
 
 
+FOLLOW_UP_SOURCE_TYPES = ("health_record", "home_visit", "assistance_request", "incident")
+FOLLOW_UP_PRIORITIES = ("Low", "Medium", "High", "Urgent")
+FOLLOW_UP_STATUSES = ("Pending", "In Progress", "Completed")
+
+
+class FollowUp(db.Model):
+    """Turns the follow_up_required flag already on HealthRecord,
+    HomeVisit, AssistanceRequest, and Incident into an actual, assignable,
+    trackable task — those 4 models already had the flag; nothing acted
+    on it. source_type/source_id is the same polymorphic pointer already
+    established by Notification.related_resource_id and
+    AssignmentAttachment/AssignmentMessage — a single FK can't target 4
+    different tables, and a nullable FK column per possible source is
+    worse bloat for a field whose only job is "what triggered this."
+    elderly_member_id IS a real FK, unlike the source pointer — every
+    follow-up is about one specific person regardless of which module it
+    came from, and that's what every list/filter/timeline view actually
+    queries by.
+
+    "Overdue" is deliberately NOT a stored status — it's a computed
+    condition (status != Completed and due_date < today), the same way
+    this app derives rather than stores every other time-based view (e.g.
+    low-stock is a live column comparison, not a stored flag)."""
+
+    __tablename__ = "follow_ups"
+    __table_args__ = (
+        db.Index("ix_follow_ups_elderly_status", "elderly_member_id", "status"),
+        db.Index("ix_follow_ups_source", "source_type", "source_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    source_type = db.Column(db.String(20), nullable=False)
+    source_id = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    priority = db.Column(db.String(10), nullable=False, default="Medium")
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Pending")
+    notes = db.Column(db.Text, nullable=True)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    assigned_to = db.relationship("User", foreign_keys=[assigned_to_id])
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    def to_dict(self):
+        today = utcnow().date()
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "source_type": self.source_type,
+            "source_id": self.source_id,
+            "reason": self.reason,
+            "priority": self.priority,
+            "assigned_to_id": self.assigned_to_id,
+            "assigned_to": self.assigned_to.name if self.assigned_to else None,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "status": self.status,
+            "is_overdue": self.status != "Completed" and self.due_date is not None and self.due_date < today,
+            "notes": self.notes,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_by": self.created_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 NOTIFICATION_TYPES = (
     "Medication Reminder", "Health Follow-up", "Home Visit Assignment", "Home Visit Reminder",
     "Assistance Request Assignment", "Low Inventory Alert", "Upcoming Activity",
-    "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "Assignment Message", "System Notification",
+    "Incident Follow-up", "Volunteer Verified", "Volunteer Rejected", "Assignment Message",
+    "Follow-up Assigned", "Follow-up Overdue", "Critical Incident", "System Notification",
 )
 
 

@@ -31,6 +31,11 @@ Home visit object:
 }
 ```
 
+**`follow_up_required: true` auto-creates a [FollowUp](followups.md)**
+(defaulting `assigned_to_id` to this visit's own assignee, if any) — on a
+`PATCH` that transitions it `False → True`. Not settable at creation —
+see `POST` below.
+
 Priorities: `Low | Medium | High | Urgent` (default `Medium`).
 Statuses: `Pending | Assigned | Scheduled | In Progress | Completed | Cancelled`
 — there's no enforced state machine; admin/staff (and the assignee, within

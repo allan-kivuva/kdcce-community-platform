@@ -4,7 +4,7 @@ from ..auth.decorators import roles_required
 from ..extensions import db
 from ..models import (
     Activity, ActivityParticipant, AssistanceRequest, Attendance, Donation, ElderlyMember,
-    HealthRecord, HomeVisit, Incident, InventoryItem, Meal, MealAttendance, Medication,
+    FollowUp, HealthRecord, HomeVisit, Incident, InventoryItem, Meal, MealAttendance, Medication,
     MedicationAdministration, StockMovement, User, VolunteerProfile,
 )
 from ..utils import ReportFilterError, csv_response, parse_date_range
@@ -221,15 +221,40 @@ def volunteers_report():
     for profile in verified:
         visits = HomeVisit.query.filter_by(assigned_to_id=profile.user_id)
         requests_ = AssistanceRequest.query.filter_by(assigned_to_id=profile.user_id)
+
+        visits_total = visits.count()
+        requests_total = requests_.count()
+        visits_completed = visits.filter_by(status="Completed").count()
+        requests_completed = requests_.filter_by(status="Completed").count()
+        visits_cancelled = visits.filter_by(status="Cancelled").count()
+        requests_cancelled = requests_.filter_by(status="Cancelled").count()
+        total = visits_total + requests_total
+        completed = visits_completed + requests_completed
+        cancelled = visits_cancelled + requests_cancelled
+        active = (
+            visits.filter(HomeVisit.status.in_(("Assigned", "Scheduled", "In Progress"))).count()
+            + requests_.filter(AssistanceRequest.status.in_(("Assigned", "Accepted", "In Progress"))).count()
+        )
+
+        assigned_elderly_count = (
+            db.session.query(db.func.count(db.distinct(HomeVisit.elderly_member_id)))
+            .filter(HomeVisit.assigned_to_id == profile.user_id, HomeVisit.status.in_(("Assigned", "Scheduled", "In Progress")))
+            .scalar()
+        )
+
         workload.append({
             "user_id": profile.user_id,
             "name": profile.user.name,
-            "home_visits_total": visits.count(),
-            "home_visits_completed": visits.filter_by(status="Completed").count(),
-            "assistance_requests_total": requests_.count(),
-            "assistance_requests_completed": requests_.filter_by(status="Completed").count(),
-            "active_assignments": visits.filter(HomeVisit.status.in_(("Assigned", "Scheduled", "In Progress"))).count()
-            + requests_.filter(AssistanceRequest.status.in_(("Assigned", "Accepted", "In Progress"))).count(),
+            "home_visits_total": visits_total,
+            "home_visits_completed": visits_completed,
+            "assistance_requests_total": requests_total,
+            "assistance_requests_completed": requests_completed,
+            "active_assignments": active,
+            "pending_assignments": max(total - completed - cancelled, 0),
+            "cancelled_assignments": cancelled,
+            "completion_rate": round(completed / total * 100, 1) if total else 0.0,
+            "assigned_elderly_count": assigned_elderly_count,
+            "follow_ups_completed": FollowUp.query.filter_by(assigned_to_id=profile.user_id, status="Completed").count(),
         })
 
     return jsonify(report={

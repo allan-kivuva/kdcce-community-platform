@@ -32,6 +32,8 @@ class AssistanceRequestStaffUpdateSchema(Schema):
     description = fields.String(validate=validate.Length(min=1, max=2000))
     scheduled_at = fields.DateTime(allow_none=True)
     outcome_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
+    follow_up_required = fields.Boolean()
+    follow_up_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
 
 
 class AssistanceRequestAssigneeUpdateSchema(Schema):
@@ -40,3 +42,5 @@ class AssistanceRequestAssigneeUpdateSchema(Schema):
 
     status = fields.String(allow_none=False, validate=validate.OneOf(ASSIGNEE_SETTABLE_STATUSES))
     outcome_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
+    follow_up_required = fields.Boolean()
+    follow_up_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))

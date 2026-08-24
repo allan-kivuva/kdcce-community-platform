@@ -31,8 +31,12 @@ def test_dashboard_sections_present_on_empty_dataset(client, make_staff_user, au
     _, token = make_staff_user("admin")
     resp = client.get("/api/analytics/dashboard", headers=auth_header(token))
     body = resp.get_json()["dashboard"]
-    for section in ("elderly_care", "home_community", "health", "feeding_resources", "activities", "incidents"):
+    for section in ("elderly_care", "home_community", "health", "feeding_resources", "activities", "incidents", "follow_ups", "upcoming_visits", "volunteer_performance", "today_activity"):
         assert section in body
+    assert body["follow_ups"]["pending"] == 0
+    assert body["upcoming_visits"]["count"] == 0
+    assert body["volunteer_performance"]["active_volunteers"] == 0
+    assert body["volunteer_performance"]["completion_rate"] == 0.0
     assert body["elderly_care"]["total_elderly_members"] == 0
     assert body["health"]["clinic_visits"] is None
 
@@ -157,3 +161,58 @@ def test_incidents_section_counts_and_recent(client, make_staff_user, auth_heade
     # A dashboard tile must not leak the sensitive free-text description —
     # only type/status/date/who, same fields already visible elsewhere.
     assert "description" not in body["recent"][0]
+
+
+def test_follow_ups_section_counts_pending_and_overdue(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    client.post("/api/followups", json={"elderly_member_id": member["id"], "reason": "Overdue", "due_date": "2020-01-01"}, headers=auth_header(token))
+    client.post("/api/followups", json={"elderly_member_id": member["id"], "reason": "Not due yet", "due_date": "2099-01-01"}, headers=auth_header(token))
+
+    resp = client.get("/api/analytics/dashboard", headers=auth_header(token))
+    body = resp.get_json()["dashboard"]["follow_ups"]
+    assert body["pending"] == 2
+    assert body["overdue"] == 1
+
+
+def test_upcoming_visits_section(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    client.post("/api/home-visits", json={"elderly_member_id": member["id"], "reason": "x", "scheduled_at": "2099-01-01T10:00:00+00:00"}, headers=auth_header(token))
+    # Past-scheduled and unscheduled visits must not count as "upcoming".
+    client.post("/api/home-visits", json={"elderly_member_id": member["id"], "reason": "x"}, headers=auth_header(token))
+
+    resp = client.get("/api/analytics/dashboard", headers=auth_header(token))
+    body = resp.get_json()["dashboard"]["upcoming_visits"]
+    assert body["count"] == 1
+    assert body["upcoming"][0]["elderly_member_name"] == "Mary Achieng"
+
+
+def test_volunteer_performance_section_reflects_real_data(client, make_user, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    vol_user, _, _ = make_user(email="perf@example.com")
+    volunteers = client.get("/api/volunteers", headers=auth_header(token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == "perf@example.com")["id"]
+    client.patch(f"/api/volunteers/{vid}", json={"status": "Verified"}, headers=auth_header(token))
+
+    visit = client.post("/api/home-visits", json={"elderly_member_id": member["id"], "reason": "x", "assigned_to_id": vol_user["id"]}, headers=auth_header(token)).get_json()["visit"]
+    client.patch(f"/api/home-visits/{visit['id']}", json={"status": "Completed"}, headers=auth_header(token))
+
+    resp = client.get("/api/analytics/dashboard", headers=auth_header(token))
+    body = resp.get_json()["dashboard"]["volunteer_performance"]
+    assert body["active_volunteers"] == 1
+    assert body["total_assignments"] == 1
+    assert body["completed_assignments"] == 1
+    assert body["completion_rate"] == 100.0
+
+
+def test_today_activity_shows_only_todays_events(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    client.post("/api/attendance/check-in", json={"elderly_member_id": member["id"]}, headers=auth_header(token))
+
+    resp = client.get("/api/analytics/dashboard", headers=auth_header(token))
+    body = resp.get_json()["dashboard"]["today_activity"]
+    assert len(body["attendance"]) == 1
+    assert body["attendance"][0]["elderly_member_name"] == "Mary Achieng"

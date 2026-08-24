@@ -6,6 +6,7 @@ from ..assignments.schemas import AssignmentMessageCreateSchema
 from ..assignments.service import AttachmentError, attachment_file_path, get_attachment, list_messages, save_photo, send_message
 from ..auth.decorators import roles_required
 from ..extensions import db
+from ..followups.service import create_from_source
 from ..models import ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
 from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
@@ -185,6 +186,7 @@ def update_visit(visit_id):
         data["completed_at"] = utcnow()
 
     previous_assignee = visit.assigned_to_id
+    was_follow_up_required = visit.follow_up_required
     for field, value in data.items():
         setattr(visit, field, value)
 
@@ -193,6 +195,13 @@ def update_visit(visit_id):
             visit.assigned_to_id, "Home Visit Assignment", "Home visit assigned to you",
             f"You have been assigned a home visit for {visit.elderly_member.full_name}.",
             related_resource_type="home_visit", related_resource_id=visit.id,
+        )
+
+    if visit.follow_up_required and not was_follow_up_required:
+        create_from_source(
+            visit.elderly_member_id, "home_visit", visit.id,
+            visit.follow_up_notes or f"Follow-up required after a home visit for {visit.elderly_member.full_name}.",
+            int(get_jwt_identity()), assigned_to_id=visit.assigned_to_id,
         )
 
     db.session.commit()

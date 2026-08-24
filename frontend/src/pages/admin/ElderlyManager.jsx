@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Search, Plus, Pencil, Trash2, User } from 'lucide-react'
 import Shell from '../../components/admin/Shell'
 import Modal from '../../components/admin/Modal'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
@@ -101,7 +102,7 @@ export default function ElderlyManager({ showToast }) {
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-xl border border-kBorder bg-kSurface px-4 py-3 text-sm text-kInk"><option>All</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
           </div>
           <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-4">Member ID</th><th className="px-5 py-4">Name</th><th className="px-5 py-4">Gender</th><th className="px-5 py-4">OPA</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>
-            {filtered.map(m => <tr key={m.id} className="border-b border-kBorderSoft"><td className="px-5 py-4 text-kMuted">{m.member_id}</td><td className="px-5 py-4 font-semibold text-kInk">{m.full_name}</td><td className="px-5 py-4 text-kMuted">{m.gender}</td><td className="px-5 py-4 text-kMuted">{m.opa_name || '—'}</td><td className="px-5 py-4 text-kMuted">{m.status}</td><td className="px-5 py-4"><div className="flex gap-3"><button onClick={() => setModal({ data: m })} className="text-kOrange"><Pencil size={16} /></button>{isAdmin && <button onClick={() => remove(m)} className="text-kMuted hover:text-red-600"><Trash2 size={16} /></button>}</div></td></tr>)}
+            {filtered.map(m => <tr key={m.id} className="border-b border-kBorderSoft"><td className="px-5 py-4 text-kMuted">{m.member_id}</td><td className="px-5 py-4 font-semibold text-kInk">{m.full_name}</td><td className="px-5 py-4 text-kMuted">{m.gender}</td><td className="px-5 py-4 text-kMuted">{m.opa_name || '—'}</td><td className="px-5 py-4 text-kMuted">{m.status}</td><td className="px-5 py-4"><div className="flex gap-3"><Link to={`/admin/elderly/${m.id}`} className="text-kGreen" title="View profile"><User size={16} /></Link><button onClick={() => setModal({ data: m })} className="text-kOrange"><Pencil size={16} /></button>{isAdmin && <button onClick={() => remove(m)} className="text-kMuted hover:text-red-600"><Trash2 size={16} /></button>}</div></td></tr>)}
             {filtered.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-kMuted">No members match your search.</td></tr>}
           </tbody></table></div>
         </div>}

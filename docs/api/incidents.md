@@ -17,7 +17,7 @@ Incident object:
 {
   "id": 1, "elderly_member_id": 1, "elderly_member_name": "Mary Achieng",
   "elderly_member_code": "KDCCE-2026-0001", "reported_by": "Jane Staffer",
-  "incident_type": "Fall", "occurred_at": "2026-08-24T14:30:00+00:00",
+  "incident_type": "Fall", "severity": "Medium", "occurred_at": "2026-08-24T14:30:00+00:00",
   "location": "Dining hall", "description": "Slipped in the dining hall",
   "immediate_action_taken": "Assisted to a chair, checked for injury",
   "emergency_contact_notified": true, "emergency_contact_notified_at": null,
@@ -27,7 +27,17 @@ Incident object:
 }
 ```
 `incident_type`: `Fall | Injury | Medical Concern | Accident | Safeguarding
-Concern | Other`. `status`: `Open | Under Review | Resolved | Closed`.
+Concern | Other`. `severity`: `Low | Medium | High | Critical`, defaults
+to `Medium`. `status`: `Open | Under Review | Resolved | Closed`.
+
+**`severity: "Critical"` notifies every `admin`/`staff`** (via the
+existing `notify()` chokepoint — no second notification path) — on
+creation, or on a `PATCH` that transitions severity *into* `Critical`.
+Re-saving an already-`Critical` incident does not re-notify.
+
+**`follow_up_required: true` auto-creates a [FollowUp](followups.md)** —
+same transition-only rule (creation, or a `False → True` PATCH) as the
+other 3 source modules.
 
 ## POST /api/incidents
 
@@ -36,6 +46,7 @@ Concern | Other`. `status`: `Open | Under Review | Resolved | Closed`.
   {
     "elderly_member_id": "integer, required",
     "incident_type": "required, see above",
+    "severity": "Low | Medium | High | Critical, optional, default Medium",
     "occurred_at": "ISO datetime, optional — defaults to now",
     "location": "string, optional, max 150",
     "description": "string, required, max 4000",

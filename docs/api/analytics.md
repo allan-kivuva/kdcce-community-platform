@@ -45,14 +45,42 @@ new, separate functionality, not a rewrite of it.
         "attended_30d": 47
       },
       "incidents": {
-        "open": 1, "follow_up_required": 1,
-        "recent": [{ "id": 1, "incident_type": "Fall", "status": "Open", "occurred_at": "...", "elderly_member_name": "Mary Achieng" }]
+        "open": 1, "critical_open": 0, "follow_up_required": 1,
+        "recent": [{ "id": 1, "incident_type": "Fall", "severity": "Medium", "status": "Open", "occurred_at": "...", "elderly_member_name": "Mary Achieng" }]
+      },
+      "follow_ups": { "pending": 4, "overdue": 1 },
+      "upcoming_visits": {
+        "count": 3,
+        "upcoming": [{ "id": 1, "elderly_member_name": "Mary Achieng", "assigned_to": "Grace Mwangi", "scheduled_at": "..." }]
+      },
+      "volunteer_performance": {
+        "active_volunteers": 5, "total_assignments": 23, "completed_assignments": 3, "completion_rate": 13.0
+      },
+      "today_activity": {
+        "attendance": [{ "id": 1, "elderly_member_name": "Mary Achieng", "check_in_at": "..." }],
+        "home_visits": [{ "id": 1, "elderly_member_name": "Mary Achieng", "status": "Completed" }],
+        "assistance_requests": [{ "id": 1, "elderly_member_name": "Mary Achieng", "status": "Requested" }],
+        "health_observations": [{ "id": 1, "elderly_member_name": "Mary Achieng", "wellbeing": "Good" }]
       }
     }
   }
   ```
 
 Notes:
+- `follow_ups`/`upcoming_visits`/`volunteer_performance`/`today_activity`
+  are additive — this is still the one existing dashboard endpoint,
+  extended, not a second one. `volunteer_performance` here is a
+  lightweight aggregate (a handful of bounded `COUNT` queries, no loop
+  over volunteers) — for the full per-volunteer breakdown, see
+  [reports.md](reports.md#get-apireportsvolunteers--volunteer-performance),
+  which this deliberately doesn't duplicate.
+- `upcoming_visits` includes any not-yet-happened visit that isn't
+  `Completed`/`Cancelled` — including a still-`Pending` (unassigned)
+  scheduled visit, since that's the one that most needs attention, not
+  just `Assigned`/`Scheduled` ones.
+- `today_activity` lists (not just counts) — each capped at 5, matching
+  the existing `recent`/`upcoming` list precedent already used elsewhere
+  in this endpoint.
 - `clinic_visits: null` — that module doesn't exist yet, not fabricated.
 - No "volunteer hours" anywhere — same reasoning as [reports.md](reports.md): nothing records duration/time-on-task.
 - Trend arrays are always zero-filled and exactly `7`/`14` entries long, oldest to newest, anchored on today regardless of whether any data exists for a given day — a quiet week doesn't produce a shorter array.

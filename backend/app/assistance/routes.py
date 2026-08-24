@@ -6,6 +6,7 @@ from ..assignments.schemas import AssignmentMessageCreateSchema
 from ..assignments.service import AttachmentError, attachment_file_path, get_attachment, list_messages, save_photo, send_message
 from ..auth.decorators import roles_required
 from ..extensions import db
+from ..followups.service import create_from_source
 from ..models import AssistanceRequest, ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
 from ..notifications.service import notify
 from ..utils import get_or_404, validation_error_response
@@ -181,6 +182,7 @@ def update_request(request_id):
         data["completed_at"] = utcnow()
 
     previous_assignee = req.assigned_to_id
+    was_follow_up_required = req.follow_up_required
     for field, value in data.items():
         setattr(req, field, value)
 
@@ -189,6 +191,13 @@ def update_request(request_id):
             req.assigned_to_id, "Assistance Request Assignment", "Assistance request assigned to you",
             f"You have been assigned a {req.request_type} request for {req.elderly_member.full_name}.",
             related_resource_type="assistance_request", related_resource_id=req.id,
+        )
+
+    if req.follow_up_required and not was_follow_up_required:
+        create_from_source(
+            req.elderly_member_id, "assistance_request", req.id,
+            req.follow_up_notes or f"Follow-up required after a {req.request_type} request for {req.elderly_member.full_name}.",
+            int(get_jwt_identity()), assigned_to_id=req.assigned_to_id,
         )
 
     db.session.commit()

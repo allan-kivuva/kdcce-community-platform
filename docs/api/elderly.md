@@ -83,3 +83,34 @@ never client-supplied.
 
 ### DELETE /api/elderly/{id}
 - **Auth:** `admin` only (stricter than the rest of this module — deleting a person record is meant to correct a mistaken entry, not routine offboarding; prefer `PATCH status` to `Inactive`/`Transferred`/`Deceased` instead). Response `204`. Errors: `404`.
+
+## GET /api/elderly/{id}/timeline — Care Timeline
+
+Combines events from 7 existing modules into one chronological feed for
+one person — **not** a new event table duplicating those records.
+Deliberately not built that way: every event here already lives in its
+own module's table (`Attendance`, `HealthRecord`,
+`MedicationAdministration`, `HomeVisit`, `AssistanceRequest`, `Incident`,
+`MealAttendance`); this endpoint queries all 7, scoped to one
+`elderly_member_id`, and merges + sorts the results. That's exactly 7
+fixed, already-indexed queries — not N+1 (N would scale with the amount
+of history; this never does) — plus one batch lookup for photo
+attachments (a single `IN` query, not one per visit/request).
+
+- **Auth:** `admin` or `staff`.
+- **Query params (optional):** `page` (default 1), `per_page` (default 20, max 100).
+- **Response `200`:**
+  ```json
+  {
+    "member": { ...full elderly member object... },
+    "timeline": [
+      {
+        "type": "home_visit", "timestamp": "2026-08-24T10:00:00+00:00", "title": "Home Visit",
+        "details": { "assigned_to": "Grace Mwangi", "status": "Completed", "reason": "...", "observations": "...", "has_photo": true }
+      }
+    ],
+    "pagination": { "page": 1, "per_page": 20, "total": 12, "pages": 1 }
+  }
+  ```
+  `type` is one of `attendance | health | medication | home_visit | assistance | incident | meal`. `details` shape varies by type — always includes whatever's meaningful for that event (see `elderly/routes.py`'s `get_member_timeline`), never the full source record. Newest first.
+- **Errors:** `403`, `404`.

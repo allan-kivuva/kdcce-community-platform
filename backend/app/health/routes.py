@@ -4,6 +4,7 @@ from marshmallow import ValidationError
 
 from ..auth.decorators import roles_required
 from ..extensions import db
+from ..followups.service import create_from_source
 from ..models import ElderlyMember, HealthRecord, utcnow
 from ..utils import get_or_404, validation_error_response
 from .schemas import HealthRecordSchema
@@ -37,6 +38,13 @@ def create_record():
     if record.recorded_at is None:
         record.recorded_at = utcnow()
     db.session.add(record)
+    db.session.flush()  # assigns record.id so a follow-up can reference it
+    if record.follow_up_required:
+        create_from_source(
+            record.elderly_member_id, "health_record", record.id,
+            record.follow_up_notes or "Follow-up required after a health observation.",
+            int(get_jwt_identity()),
+        )
     db.session.commit()
     return jsonify(record=record.to_dict()), 201
 
@@ -78,8 +86,17 @@ def update_record(record_id):
         if invalid:
             return invalid
 
+    was_follow_up_required = record.follow_up_required
     for field, value in data.items():
         setattr(record, field, value)
+
+    if record.follow_up_required and not was_follow_up_required:
+        create_from_source(
+            record.elderly_member_id, "health_record", record.id,
+            record.follow_up_notes or "Follow-up required after a health observation.",
+            int(get_jwt_identity()),
+        )
+
     db.session.commit()
     return jsonify(record=record.to_dict()), 200
 

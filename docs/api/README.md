@@ -66,6 +66,9 @@ unauthenticated write endpoint (`register`, `login`, `POST /api/donations`,
 | Notifications | [notifications.md](notifications.md) | Implemented |
 | Inbox | [inbox.md](inbox.md) | Implemented |
 | Assignment photo & conversation | [assignment-collaboration.md](assignment-collaboration.md) | Implemented |
+| Follow-ups | [followups.md](followups.md) | Implemented |
+| Assignment calendar | [calendar.md](calendar.md) | Implemented |
+| Global search | [search.md](search.md) | Implemented |
 | Donations | [donations.md](donations.md) | Implemented |
 | Blog | [blog.md](blog.md) | Implemented |
 | Gallery | [gallery.md](gallery.md) | Implemented |

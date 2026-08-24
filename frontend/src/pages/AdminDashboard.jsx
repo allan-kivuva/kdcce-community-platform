@@ -7,6 +7,9 @@ import Shell from '../components/admin/Shell'
 import { useToast, errorMessage, LoadingState, ErrorState } from '../components/admin/adminHelpers'
 import { useApiResource } from '../lib/useApiResource'
 import ElderlyManager from './admin/ElderlyManager'
+import ElderlyProfile from './admin/ElderlyProfile'
+import FollowUpsManager from './admin/FollowUpsManager'
+import AssignmentCalendar from './admin/AssignmentCalendar'
 import AttendanceManager from './admin/AttendanceManager'
 import HealthManager from './admin/HealthManager'
 import MedicationManager from './admin/MedicationManager'
@@ -229,6 +232,9 @@ export default function AdminDashboard() {
     <Routes>
       <Route index element={<Overview donations={donationsApi.items} blogPosts={blogApi.items} crafts={craftsApi.items} />} />
       <Route path="elderly" element={<ElderlyManager showToast={showToast} />} />
+      <Route path="elderly/:id" element={<ElderlyProfile />} />
+      <Route path="followups" element={<FollowUpsManager showToast={showToast} />} />
+      <Route path="calendar" element={<AssignmentCalendar />} />
       <Route path="attendance" element={<AttendanceManager showToast={showToast} />} />
       <Route path="health" element={<HealthManager showToast={showToast} />} />
       <Route path="medication" element={<MedicationManager showToast={showToast} />} />

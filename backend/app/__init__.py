@@ -40,6 +40,9 @@ def create_app(config_object=Config):
     from .analytics.routes import bp as analytics_bp
     from .notifications.routes import bp as notifications_bp
     from .inbox.routes import bp as inbox_bp, admin_bp as admin_inbox_bp
+    from .followups.routes import bp as followups_bp
+    from .calendar.routes import bp as calendar_bp
+    from .search.routes import bp as search_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
@@ -64,6 +67,9 @@ def create_app(config_object=Config):
     app.register_blueprint(notifications_bp)
     app.register_blueprint(inbox_bp)
     app.register_blueprint(admin_inbox_bp)
+    app.register_blueprint(followups_bp)
+    app.register_blueprint(calendar_bp)
+    app.register_blueprint(search_bp)
 
     from .cli import seed_admin, seed_demo
     app.cli.add_command(seed_admin)

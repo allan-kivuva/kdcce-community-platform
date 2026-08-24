@@ -18,6 +18,10 @@ Health record object:
 }
 ```
 
+**`follow_up_required: true` auto-creates a [FollowUp](followups.md)** —
+on creation, or on a `PATCH` that transitions it `False → True`. Re-saving
+an already-`true` flag does not create a second one.
+
 ## POST /api/health-records
 
 - **Auth:** `admin` or `staff`.

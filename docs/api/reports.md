@@ -53,10 +53,17 @@ Same filters. Columns: Date, Attendance Count.
 ### GET /api/reports/home-visits/export.csv
 Same filters (`date_from`/`date_to`/`opa_id`). Columns: Elderly Member, Status, Priority, Assigned To, Created.
 
-## GET /api/reports/volunteers
+## GET /api/reports/volunteers — Volunteer Performance
 
 - **Filters:** none.
-- **Response `200`:** `by_status` (Pending/Verified/Rejected counts), `active_volunteers` (Verified count), `workload`: one entry per Verified volunteer with `home_visits_total`/`home_visits_completed`, `assistance_requests_total`/`assistance_requests_completed`, `active_assignments` (currently open across both).
+- **Response `200`:** `by_status` (Pending/Verified/Rejected counts), `active_volunteers` (Verified count), `workload`: one entry per Verified volunteer with:
+  - `home_visits_total`/`home_visits_completed`, `assistance_requests_total`/`assistance_requests_completed`
+  - `active_assignments` (currently open across both), `pending_assignments` (`total - completed - cancelled`), `cancelled_assignments`
+  - `completion_rate` (percentage, `0.0` if the volunteer has zero assignments — never a division error)
+  - `assigned_elderly_count` — distinct elderly members across this volunteer's currently-active (not completed/cancelled) home visits
+  - `follow_ups_completed` — this volunteer's completed [follow-ups](followups.md)
+
+  Still one small query loop per volunteer (not a single mega-query) — same as before this was extended, bounded by how many volunteers exist, not by their history size. No "volunteer hours": nothing in this system records duration/time-on-task, so that number would be fabricated, not measured.
 
 ## GET /api/reports/feeding
 

@@ -220,6 +220,66 @@ def test_volunteers_report_workload_and_status_breakdown(client, make_user, make
     assert workload["home_visits_completed"] == 1
     assert workload["active_assignments"] == 0
     assert not any("hour" in key.lower() for key in workload) and not any("hour" in key.lower() for key in body)
+    # Extended fields: 1 completed, 0 pending, 0 cancelled -> 100% completion.
+    assert workload["completion_rate"] == 100.0
+    assert workload["pending_assignments"] == 0
+    assert workload["cancelled_assignments"] == 0
+    assert workload["assigned_elderly_count"] == 0  # the visit is Completed, not "currently assigned"
+    assert workload["follow_ups_completed"] == 0
+
+
+def test_volunteers_report_pending_cancelled_and_assigned_elderly(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol_user, _, _ = make_user(email="vera7@example.com", name="Vera Seven")
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == "vera7@example.com")["id"]
+    client.patch(f"/api/volunteers/{vid}", json={"status": "Verified"}, headers=auth_header(admin_token))
+
+    # One active (pending), one cancelled.
+    active_visit = client.post("/api/home-visits", json={"elderly_member_id": member["id"], "reason": "x", "assigned_to_id": vol_user["id"]}, headers=auth_header(admin_token)).get_json()["visit"]
+    cancelled_visit = client.post("/api/home-visits", json={"elderly_member_id": member["id"], "reason": "x", "assigned_to_id": vol_user["id"]}, headers=auth_header(admin_token)).get_json()["visit"]
+    client.patch(f"/api/home-visits/{cancelled_visit['id']}", json={"status": "Cancelled"}, headers=auth_header(admin_token))
+
+    resp = client.get("/api/reports/volunteers", headers=auth_header(admin_token))
+    workload = next(w for w in resp.get_json()["report"]["workload"] if w["name"] == "Vera Seven")
+    assert workload["pending_assignments"] == 1
+    assert workload["cancelled_assignments"] == 1
+    assert workload["completion_rate"] == 0.0
+    assert workload["assigned_elderly_count"] == 1  # only the still-Assigned visit counts
+
+
+def test_volunteers_report_follow_ups_completed(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol_user, _, _ = make_user(email="vera8@example.com", name="Vera Eight")
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == "vera8@example.com")["id"]
+    client.patch(f"/api/volunteers/{vid}", json={"status": "Verified"}, headers=auth_header(admin_token))
+
+    fu = client.post("/api/followups", json={"elderly_member_id": member["id"], "reason": "x", "assigned_to_id": vol_user["id"]}, headers=auth_header(admin_token)).get_json()["followup"]
+    client.patch(f"/api/followups/{fu['id']}", json={"status": "Completed"}, headers=auth_header(admin_token))
+
+    resp = client.get("/api/reports/volunteers", headers=auth_header(admin_token))
+    workload = next(w for w in resp.get_json()["report"]["workload"] if w["name"] == "Vera Eight")
+    assert workload["follow_ups_completed"] == 1
+
+
+def test_volunteers_report_handles_a_volunteer_with_zero_assignments(client, make_user, make_staff_user, auth_header):
+    """Edge case: a Verified volunteer who has never been assigned
+    anything must show clean zeros, not an error or a division crash."""
+    _, admin_token = make_staff_user("admin")
+    make_user(email="idle@example.com", name="Idle Volunteer")
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == "idle@example.com")["id"]
+    client.patch(f"/api/volunteers/{vid}", json={"status": "Verified"}, headers=auth_header(admin_token))
+
+    resp = client.get("/api/reports/volunteers", headers=auth_header(admin_token))
+    workload = next(w for w in resp.get_json()["report"]["workload"] if w["name"] == "Idle Volunteer")
+    assert workload["home_visits_total"] == 0
+    assert workload["completion_rate"] == 0.0
+    assert workload["assigned_elderly_count"] == 0
+    assert workload["follow_ups_completed"] == 0
 
 
 # ---------- Feeding report ----------
