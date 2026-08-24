@@ -1,71 +1,84 @@
-# KDCCE UI
+# KDCCE Community Platform
 
-React + Vite + Tailwind CSS frontend for the Moringa School KDCCE course project.
+Software for Kibera Day Care Centre for the Elderly (KDCCE): a public site
+(programs, gallery, blog, donations, craft shop) today, growing into an
+internal elderly-care operations system (elderly member records, attendance,
+health & wellness, home visits, volunteer management, and more).
 
-## Start the project
+This is a group project. The repo is split so frontend and backend teams can
+work independently against a documented API contract.
 
-Use a terminal inside this folder:
+```
+kdcce-community-platform/
+├── frontend/     React + Vite + Tailwind. See frontend/README.md.
+├── backend/      Flask API + SQLAlchemy + JWT auth. See backend/README.md.
+├── docs/api/     API contract: one file per module, endpoint/method/auth/
+│                 request/response/errors/role. Read before wiring a new
+│                 frontend screen to an existing or new endpoint.
+└── docker-compose.yml   Dev environment: both services with hot reload.
+```
+
+## Quickstart
+
+### Option A — Docker (both services at once)
 
 ```bash
-npm install
-npm run dev
+docker compose up
 ```
 
-Open the URL printed by Vite, normally:
+Frontend: `http://localhost:5173`. Backend: `http://localhost:5000`.
 
-`http://localhost:5173`
-
-Do **not** double-click `index.html`. Vite must serve the project.
-
-## If the page is blank
-
-Run:
+First run only, apply migrations inside the backend container:
 
 ```bash
-rm -rf node_modules package-lock.json
+docker compose exec backend flask db upgrade
+```
+
+### Option B — Run each side natively
+
+See `backend/README.md` and `frontend/README.md` for full setup. Short version:
+
+```bash
+# backend
+cd backend
+python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+cp .env.example .env
+FLASK_APP=wsgi.py ./.venv/bin/python3 -m flask db upgrade
+./.venv/bin/python3 -m flask run --port 5000
+
+# frontend (separate terminal)
+cd frontend
 npm install
+cp .env.example .env
 npm run dev
 ```
 
-On Windows PowerShell:
+## Team ownership
 
-```powershell
-Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
-Remove-Item package-lock.json -ErrorAction SilentlyContinue
-npm install
-npm run dev
+- **Frontend team** works in `frontend/`: pages, components, forms, tables,
+  dashboards, API integration (via `frontend/src/lib/api.js`), responsive
+  design, accessibility.
+- **Backend team** works in `backend/`: Flask blueprints, SQLAlchemy models,
+  Alembic migrations, auth/RBAC, validation (Marshmallow schemas), business
+  logic, pytest tests.
+- **API contract** lives in `docs/api/` and is the shared source of truth
+  between the two — update it in the same PR that adds or changes an
+  endpoint, so the other side never has to guess the shape of a request or
+  response.
+
+## Branching
+
+One feature branch per module, e.g. `feature/elderly-management`,
+`feature/attendance`, `feature/home-visits`, `feature/volunteer-management`,
+`feature/feeding`, `feature/health-wellness`. Each new backend module gets
+its own Flask blueprint (`backend/app/<module>/`) and its own doc file under
+`docs/api/`; each new frontend feature gets its own page/manager component
+under `frontend/src/pages/` — this keeps different people's branches from
+touching the same files.
+
+## Tests
+
+```bash
+cd backend && ./.venv/bin/python3 -m pytest tests/ -v
+cd frontend && npm run build   # no frontend test suite yet
 ```
-
-The app includes an error boundary so runtime errors display on the page instead of silently leaving a blank screen.
-
-## Pages
-
-- `/`
-- `/about`
-- `/programs`
-- `/gallery`
-- `/blog`
-- `/blog/1`
-- `/sponsor`
-- `/donate`
-- `/contact`
-- `/crafts`
-- `/admin/login`
-- `/admin`
-
-This is frontend UI only. Flask, database, authentication, payments and real admin persistence are added in the backend phase.
-
-## Image note
-The current UI uses locally bundled, AI-generated mock photography depicting older Kenyan community members and activities. These are placeholder visuals for the course project and should be replaced with approved organization/royalty-free assets before any real-world publication.
-
-## Image update
-The public image set has been replaced with the user-provided Pexels photography supplied for this course project. Images are locally bundled under `public/images/` and cropped/resized to match the UI's hero, card, gallery, and profile aspect ratios.
-
-
-## Logo & UI palette
-
-The frontend uses the supplied KDCCE logo at `public/images/logo.png` and derives its visual palette from that artwork: deep blue, magenta, lime green, white, and dark neutrals. The public header/footer and the admin portal use the same brand identity.
-
-## Admin portal
-
-The repository includes the **admin portal UI** under `/admin/login` and `/admin/*`. At this UI stage it is intentionally mock data only. The Flask backend must later provide authentication, password hashing, role-based authorization (Admin/Staff), real donation records, content CRUD, image uploads, contact inbox handling, CSV export, and audit logging. The frontend should never be treated as the security boundary; permissions must be enforced by the backend.
