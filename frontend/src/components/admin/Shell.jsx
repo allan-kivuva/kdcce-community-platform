@@ -1,5 +1,5 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { BookOpen, ClipboardCheck, FileImage, Heart, Inbox, LayoutDashboard, LogOut, Package, UserRound, Users } from 'lucide-react'
+import { BookOpen, ClipboardCheck, FileImage, Heart, HeartPulse, Inbox, LayoutDashboard, LogOut, Package, Pill, UserRound, Users } from 'lucide-react'
 import ThemeToggle from '../../theme/ThemeToggle'
 import { getStoredUser, clearSession } from '../../lib/api'
 
@@ -10,6 +10,8 @@ const menu = [
   ['Overview', '/admin', 'LayoutDashboard'],
   ['Elderly Members', '/admin/elderly', 'UserRound'],
   ['Attendance', '/admin/attendance', 'ClipboardCheck'],
+  ['Health & Wellness', '/admin/health', 'HeartPulse'],
+  ['Medication', '/admin/medication', 'Pill'],
   ['Donations', '/admin/donations', 'Heart'],
   ['Blog Posts', '/admin/blog', 'BookOpen'],
   ['Gallery', '/admin/gallery', 'FileImage'],
@@ -17,7 +19,7 @@ const menu = [
   ['Craft Shop', '/admin/crafts', 'Package'],
   ['Inbox', '/admin/inbox', 'Inbox'],
 ]
-const icons = { LayoutDashboard, Heart, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck }
+const icons = { LayoutDashboard, Heart, HeartPulse, Pill, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck }
 
 export default function Shell({ children }) {
   const navigate = useNavigate()

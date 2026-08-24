@@ -280,6 +280,137 @@ class Attendance(db.Model):
         }
 
 
+WELLBEING_LEVELS = ("Good", "Fair", "Poor")
+
+
+class HealthRecord(db.Model):
+    """A single point-in-time wellness observation. Purely a record of what
+    staff observed — never an automated interpretation or diagnosis. All
+    vitals are optional (a visit might only note mood, or only weight)."""
+
+    __tablename__ = "health_records"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    recorded_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    blood_pressure_systolic = db.Column(db.Integer, nullable=True)
+    blood_pressure_diastolic = db.Column(db.Integer, nullable=True)
+    temperature_celsius = db.Column(db.Numeric(4, 1), nullable=True)
+    pulse_bpm = db.Column(db.Integer, nullable=True)
+    weight_kg = db.Column(db.Numeric(5, 1), nullable=True)
+    wellbeing = db.Column(db.String(10), nullable=True)
+    mood = db.Column(db.String(60), nullable=True)
+    physical_activity = db.Column(db.Text, nullable=True)
+    observations = db.Column(db.Text, nullable=True)
+    follow_up_required = db.Column(db.Boolean, default=False, nullable=False)
+    follow_up_notes = db.Column(db.Text, nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    recorded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "recorded_at": self.recorded_at.isoformat(),
+            "blood_pressure_systolic": self.blood_pressure_systolic,
+            "blood_pressure_diastolic": self.blood_pressure_diastolic,
+            "temperature_celsius": float(self.temperature_celsius) if self.temperature_celsius is not None else None,
+            "pulse_bpm": self.pulse_bpm,
+            "weight_kg": float(self.weight_kg) if self.weight_kg is not None else None,
+            "wellbeing": self.wellbeing,
+            "mood": self.mood,
+            "physical_activity": self.physical_activity,
+            "observations": self.observations,
+            "follow_up_required": self.follow_up_required,
+            "follow_up_notes": self.follow_up_notes,
+            "recorded_by": self.recorded_by.name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+MEDICATION_STATUSES = ("Active", "Completed", "Discontinued")
+ADMINISTRATION_STATUSES = ("Given", "Missed", "Refused")
+
+
+class Medication(db.Model):
+    """A prescribed course. Individual doses are logged separately in
+    MedicationAdministration — this row is the standing order, not a dose
+    log. There is no automated push-reminder system yet (see docs/api);
+    "reminders" today means the Active list itself."""
+
+    __tablename__ = "medications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    name = db.Column(db.String(150), nullable=False)
+    dosage = db.Column(db.String(100), nullable=True)
+    instructions = db.Column(db.Text, nullable=True)
+    schedule = db.Column(db.String(100), nullable=True)
+    start_date = db.Column(db.Date, default=lambda: utcnow().date(), nullable=False)
+    end_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="Active")
+    notes = db.Column(db.Text, nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    created_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "name": self.name,
+            "dosage": self.dosage,
+            "instructions": self.instructions,
+            "schedule": self.schedule,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "status": self.status,
+            "notes": self.notes,
+            "created_by": self.created_by.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class MedicationAdministration(db.Model):
+    """One row per dose event — given, missed, or refused. This is the
+    administration record the vision doc asks for; it's staff-logged, not
+    device- or patient-reported."""
+
+    __tablename__ = "medication_administrations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    medication_id = db.Column(db.Integer, db.ForeignKey("medications.id"), nullable=False, index=True)
+    administered_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="Given")
+    notes = db.Column(db.Text, nullable=True)
+    administered_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    administered_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "medication_id": self.medication_id,
+            "administered_at": self.administered_at.isoformat(),
+            "status": self.status,
+            "notes": self.notes,
+            "administered_by": self.administered_by.name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

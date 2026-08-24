@@ -9,6 +9,8 @@ import { downloadFile } from '../lib/api'
 import { useApiResource } from '../lib/useApiResource'
 import ElderlyManager from './admin/ElderlyManager'
 import AttendanceManager from './admin/AttendanceManager'
+import HealthManager from './admin/HealthManager'
+import MedicationManager from './admin/MedicationManager'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -310,6 +312,8 @@ export default function AdminDashboard() {
       <Route index element={<Overview donations={donationsApi.items} blogPosts={blogApi.items} crafts={craftsApi.items} />} />
       <Route path="elderly" element={<ElderlyManager showToast={showToast} />} />
       <Route path="attendance" element={<AttendanceManager showToast={showToast} />} />
+      <Route path="health" element={<HealthManager showToast={showToast} />} />
+      <Route path="medication" element={<MedicationManager showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager
         donations={donationsApi.items} loading={donationsApi.loading} error={donationsApi.error} reload={donationsApi.reload}
         addDonation={body => donationsApi.create(body, '/api/donations')}

@@ -46,6 +46,20 @@ def test_opa_update_and_delete(client, make_staff_user, auth_header):
     assert deleted.status_code == 204
 
 
+def test_deleting_opa_clears_reference_on_its_members(client, make_staff_user, auth_header):
+    """Regression: relies on SQLite FK enforcement actually being on —
+    see extensions.py — otherwise ondelete='SET NULL' is silently ignored."""
+    _, token = make_staff_user("admin")
+    opa = client.post("/api/opas", json={"name": "Kibera OPA"}, headers=auth_header(token)).get_json()["opa"]
+    member = client.post("/api/elderly", json={**VALID_MEMBER, "opa_id": opa["id"]}, headers=auth_header(token)).get_json()["member"]
+
+    client.delete(f"/api/opas/{opa['id']}", headers=auth_header(token))
+
+    refreshed = client.get(f"/api/elderly/{member['id']}", headers=auth_header(token)).get_json()["member"]
+    assert refreshed["opa_id"] is None
+    assert refreshed["opa_name"] is None
+
+
 # ---------- Elderly members ----------
 
 def test_admin_can_register_elderly_member(client, make_staff_user, auth_header):
