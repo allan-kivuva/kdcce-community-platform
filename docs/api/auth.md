@@ -5,6 +5,16 @@ creates a `volunteer`; there is no client-controlled way to get a higher
 role (an admin must be promoted directly in the database for now — no
 "promote user" endpoint exists yet).
 
+**Revocation:** every access/refresh token carries a `jti`; logging out adds
+it to `RevokedToken` (`backend/app/models.py`), checked on every
+`@jwt_required()` route via `jwt.token_in_blocklist_loader`
+(`backend/app/__init__.py`). Without this a token stays valid for its full
+lifetime (1h access / 30d refresh) with no way to kill it early — logout
+would otherwise only ever be a client-side `localStorage` clear. Revoked
+rows are never pruned (no scheduler exists in this codebase); a row past its
+token's original expiry is just inert, unpruned storage, not a correctness
+issue.
+
 ## POST /api/auth/register
 
 - **Auth:** none. Rate-limited: 10/min per IP.
@@ -41,10 +51,31 @@ role (an admin must be promoted directly in the database for now — no
 - **Response `200`:** `{ "user": { "id": ..., "name": ..., "email": ..., "role": ..., "created_at": ... } }`
 - **Errors:** `401` missing/invalid/expired token.
 
+## POST /api/auth/logout
+
+- **Auth:** `Authorization: Bearer <access_token>`.
+- **Request (optional body):** `{ "refresh_token": "..." }` — if provided and
+  it decodes as a genuine refresh token, it's revoked too in the same call.
+  An unparseable value, or a token whose `type` claim isn't `"refresh"`
+  (e.g. an access token passed here by mistake), is silently ignored rather
+  than erroring — the access token used to authenticate this request is
+  still revoked either way.
+- **Response `204`.** From this point on, both tokens are rejected by every
+  protected route with `401 { "error": "Token has been revoked" }`, even
+  though neither has naturally expired yet.
+
 ## Frontend usage
 
 `frontend/src/lib/api.js` — `apiFetch()` attaches the stored access token
-automatically. `setSession(token, user)` / `getStoredUser()` / `clearSession()`
-manage `localStorage`. On any `401`, calling code should `clearSession()` and
-redirect to `/admin/login` (see `useApiResource` in `AdminDashboard.jsx` for
-the pattern to reuse in new modules).
+automatically. `setSession(token, user, refreshToken)` / `getStoredUser()` /
+`getToken()` / `getRefreshToken()` manage `localStorage`. Two ways to end a
+session:
+- **User-initiated sign-out:** call `endSession()` — it calls
+  `POST /api/auth/logout` (revoking both tokens server-side) and then clears
+  `localStorage` regardless of whether that call succeeds, so signing out
+  locally is never blocked by a network failure. Used by `Shell.jsx`'s
+  sign-out button.
+- **A `401` from any other request** (token already invalid/expired): call
+  `clearSession()` directly, not `endSession()` — there's nothing left to
+  revoke, so skip the extra network round-trip. See `useApiResource`'s `load`
+  for the pattern to reuse in new modules.

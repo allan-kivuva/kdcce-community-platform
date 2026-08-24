@@ -2,13 +2,16 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
+    decode_token,
+    get_jwt,
     get_jwt_identity,
     jwt_required,
 )
+from jwt.exceptions import PyJWTError
 from marshmallow import ValidationError
 
 from ..extensions import db, limiter
-from ..models import User, VolunteerProfile
+from ..models import RevokedToken, User, VolunteerProfile
 from .schemas import RegisterSchema, LoginSchema
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -78,6 +81,38 @@ def refresh():
         return jsonify(error="User not found"), 404
     access_token = create_access_token(identity=str(user.id), additional_claims=_identity_claims(user))
     return jsonify(access_token=access_token), 200
+
+
+@bp.post("/logout")
+@jwt_required()
+def logout():
+    """Revokes the access token used to call this endpoint, plus the
+    refresh token if the client sends one in the body. Both go into the
+    same denylist (see RevokedToken / jwt.token_in_blocklist_loader) —
+    from that point on, either token is rejected by every protected route
+    even though it hasn't naturally expired yet."""
+    db.session.add(RevokedToken(jti=get_jwt()["jti"]))
+
+    payload = request.get_json(silent=True) or {}
+    refresh_token = payload.get("refresh_token")
+    if refresh_token:
+        try:
+            refresh_claims = decode_token(refresh_token)
+        except PyJWTError:
+            refresh_claims = None
+        if refresh_claims is not None and refresh_claims.get("type") == "refresh":
+            jti = refresh_claims["jti"]
+            # Guard against a double-insert (e.g. two tabs signing out with
+            # the same refresh token) hitting the jti unique constraint —
+            # unlike the access token above, this path isn't already
+            # protected by the blocklist check happening at the decorator
+            # level, since the refresh token was never used to authenticate
+            # this request.
+            if not RevokedToken.query.filter_by(jti=jti).first():
+                db.session.add(RevokedToken(jti=jti))
+
+    db.session.commit()
+    return "", 204
 
 
 @bp.get("/me")

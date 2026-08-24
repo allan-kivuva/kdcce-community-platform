@@ -15,12 +15,12 @@ export default function AdminLogin(){
     setSigningIn(true)
     const f = new FormData(e.target)
     try {
-      const { access_token, user } = await apiFetch('/api/auth/login', {
+      const { access_token, refresh_token, user } = await apiFetch('/api/auth/login', {
         method: 'POST',
         auth: false,
         body: { email: f.get('email'), password: f.get('password') }
       })
-      setSession(access_token, user)
+      setSession(access_token, user, refresh_token)
       navigate(user.role === 'volunteer' ? '/admin/profile' : '/admin')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign in failed. Please try again.')

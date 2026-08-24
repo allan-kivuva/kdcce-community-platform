@@ -24,12 +24,26 @@ validation failures:
 | Status | Meaning | Body |
 |---|---|---|
 | 400 | Validation failed | `{ "error": "Validation failed", "details": { "<field>": ["<message>"] } }` |
-| 401 | Missing/invalid/expired token | `{ "error": "Authentication required" \| "Invalid or expired token" \| "Token has expired" }` |
+| 401 | Missing/invalid/expired/revoked token | `{ "error": "Authentication required" \| "Invalid or expired token" \| "Token has expired" \| "Token has been revoked" }` |
 | 403 | Authenticated but wrong role | `{ "error": "Forbidden" }` |
 | 404 | Resource not found | `{ "error": "<Model> not found" }` |
 | 409 | Conflict (e.g. duplicate email) | `{ "error": "<message>" }` |
 
 A `204 No Content` response (deletes) has no body.
+
+## Security
+
+Every response carries `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`Content-Security-Policy: default-src 'none'` (safe to lock all the way down
+— this API only ever returns JSON, never HTML), and
+`Strict-Transport-Security` (a no-op over plain HTTP in dev; takes effect
+once served over HTTPS). See `app/__init__.py`'s `_security_headers`.
+
+Logout revokes tokens server-side rather than only clearing them
+client-side — see [`auth.md`](auth.md#post-apiauthlogout). Every public,
+unauthenticated write endpoint (`register`, `login`, `POST /api/donations`,
+`POST /api/inbox`) is rate-limited to 10/minute per IP.
 
 ## Modules
 

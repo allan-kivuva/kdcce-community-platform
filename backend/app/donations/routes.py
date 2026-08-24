@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request
 from marshmallow import ValidationError
 
 from ..auth.decorators import roles_required
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Donation
 from ..utils import get_or_404, validation_error_response, csv_response
 from .schemas import AdminDonationCreateSchema, DonationCreateSchema, DonationUpdateSchema
@@ -36,6 +36,7 @@ def _assign_receipt_and_commit(donation):
 
 
 @bp.post("")
+@limiter.limit("10 per minute")
 def create_donation():
     """Public, unauthenticated: this is the donor-facing donation form.
     There is no real payment gateway behind this yet — see the note on

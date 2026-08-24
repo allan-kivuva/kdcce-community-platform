@@ -84,6 +84,16 @@ def create_app(config_object=Config):
     def _expired_token(jwt_header, jwt_payload):
         return jsonify(error="Token has expired"), 401
 
+    @jwt.token_in_blocklist_loader
+    def _is_token_revoked(jwt_header, jwt_payload):
+        from .models import RevokedToken
+
+        return db.session.query(RevokedToken.id).filter_by(jti=jwt_payload["jti"]).first() is not None
+
+    @jwt.revoked_token_loader
+    def _revoked_token(jwt_header, jwt_payload):
+        return jsonify(error="Token has been revoked"), 401
+
     @app.errorhandler(404)
     def _not_found(err):
         return jsonify(error=getattr(err, "description", "Not found")), 404
@@ -95,5 +105,27 @@ def create_app(config_object=Config):
     @app.errorhandler(403)
     def _forbidden(err):
         return jsonify(error=getattr(err, "description", "Forbidden")), 403
+
+    @app.errorhandler(500)
+    def _internal_error(err):
+        # Never echo str(err) back to the client — that's exactly the kind
+        # of internal detail (query text, file paths, library internals)
+        # that shouldn't leave the server. Flask/Werkzeug already logs the
+        # real exception; this just guarantees the response body matches
+        # every other endpoint's JSON error shape instead of falling
+        # through to Werkzeug's default HTML page.
+        return jsonify(error="Internal server error"), 500
+
+    @app.after_request
+    def _security_headers(response):
+        # This API only ever returns JSON, never renders HTML, so a
+        # locked-down CSP costs nothing. Headers are harmless to set even
+        # over plain HTTP in dev — browsers simply ignore HSTS there.
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = "default-src 'none'"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
     return app

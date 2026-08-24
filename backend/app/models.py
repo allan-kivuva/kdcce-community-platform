@@ -950,6 +950,24 @@ class Notification(db.Model):
         }
 
 
+class RevokedToken(db.Model):
+    """A denylist of logged-out JWTs, checked on every authenticated
+    request via jwt.token_in_blocklist_loader (see app/auth/routes.py).
+    Without this, there is no way to invalidate an access or refresh
+    token before its natural expiry (1h / 30d) — logout would only ever
+    be a client-side localStorage clear, and a copied/leaked token would
+    stay valid regardless. Rows are never cleaned up here (no scheduler
+    exists in this codebase yet, same constraint noted for notification
+    reminders); a revoked row past its original token's expiry is simply
+    inert, just unpruned storage."""
+
+    __tablename__ = "revoked_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    jti = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class InboxMessage(db.Model):
     """A public contact-form submission. Unlike Notification, this is a
     shared team mailbox, not identity-scoped: any admin/staff can view,

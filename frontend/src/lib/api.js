@@ -1,9 +1,14 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 const TOKEN_KEY = 'kdcce_token'
+const REFRESH_TOKEN_KEY = 'kdcce_refresh_token'
 const USER_KEY = 'kdcce_user'
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
 export function getStoredUser() {
@@ -11,13 +16,30 @@ export function getStoredUser() {
   return raw ? JSON.parse(raw) : null
 }
 
-export function setSession(token, user) {
+export function setSession(token, user, refreshToken) {
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+}
+
+/** Revokes the current session's tokens server-side, then clears local storage.
+ * Safe to call even with an already-invalid/expired token — a failed revoke
+ * still falls through to the local clear, since signing out locally must
+ * never get stuck behind a network call. */
+export async function endSession() {
+  const token = getToken()
+  const refreshToken = getRefreshToken()
+  if (token) {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST', body: refreshToken ? { refresh_token: refreshToken } : undefined })
+    } catch { /* token already invalid/expired, or offline — clear locally regardless */ }
+  }
+  clearSession()
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }
 
