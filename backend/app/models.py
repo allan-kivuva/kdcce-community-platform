@@ -609,6 +609,84 @@ class MealAttendance(db.Model):
         }
 
 
+INVENTORY_CATEGORIES = ("Food", "Medical", "Hygiene", "Equipment", "Other")
+STOCK_MOVEMENT_TYPES = ("In", "Out")
+
+
+class InventoryItem(db.Model):
+    """current_stock is a running total maintained ONLY by StockMovement
+    (see app/inventory/routes.py's _apply_movement) — no route ever lets a
+    client set it directly, on create or edit. That's what keeps the
+    movement ledger authoritative: the balance is always derivable from
+    (and kept in sync with) the history, never a separately-editable
+    number that could drift from it."""
+
+    __tablename__ = "inventory_items"
+    __table_args__ = (db.CheckConstraint("current_stock >= 0", name="ck_inventory_current_stock_non_negative"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), unique=True, nullable=False)
+    category = db.Column(db.String(30), nullable=False, default="Other")
+    unit = db.Column(db.String(30), nullable=False)
+    current_stock = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    minimum_stock = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "unit": self.unit,
+            "current_stock": float(self.current_stock),
+            "minimum_stock": float(self.minimum_stock),
+            "low_stock": self.current_stock <= self.minimum_stock,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
+class StockMovement(db.Model):
+    """Append-only ledger — no edit/delete endpoint, ever. A mistaken entry
+    is corrected with a compensating movement (a real accounting
+    practice), not by rewriting history. donation_id is an optional link
+    when a stock-in came from a logged Donation (see docs/api/donations.md)
+    for traceability; not every stock-in has one."""
+
+    __tablename__ = "stock_movements"
+    __table_args__ = (db.CheckConstraint("quantity > 0", name="ck_stock_movement_quantity_positive"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey("inventory_items.id"), nullable=False, index=True)
+    movement_type = db.Column(db.String(3), nullable=False)
+    quantity = db.Column(db.Numeric(10, 2), nullable=False)
+    reason = db.Column(db.Text, nullable=True)
+    expiry_date = db.Column(db.Date, nullable=True)
+    donation_id = db.Column(db.Integer, db.ForeignKey("donations.id"), nullable=True)
+    recorded_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+    item = db.relationship("InventoryItem")
+    donation = db.relationship("Donation")
+    recorded_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "item_id": self.item_id,
+            "movement_type": self.movement_type,
+            "quantity": float(self.quantity),
+            "reason": self.reason,
+            "expiry_date": self.expiry_date.isoformat() if self.expiry_date else None,
+            "donation_id": self.donation_id,
+            "recorded_by": self.recorded_by.name,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 

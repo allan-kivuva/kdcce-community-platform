@@ -16,6 +16,7 @@ import HomeVisitManager from './admin/HomeVisitManager'
 import MyAssignments from './admin/MyAssignments'
 import DonationsManager from './admin/DonationsManager'
 import FeedingManager from './admin/FeedingManager'
+import InventoryManager from './admin/InventoryManager'
 
 // Inbox has no backend yet (Step 3+) — still mock, unchanged from before.
 const initialInbox = [
@@ -265,6 +266,7 @@ export default function AdminDashboard() {
       <Route path="assignments" element={<MyAssignments showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager showToast={showToast} />} />
       <Route path="feeding" element={<FeedingManager showToast={showToast} />} />
+      <Route path="inventory" element={<InventoryManager showToast={showToast} />} />
       <Route path="blog" element={<BlogManager
         posts={blogApi.items} loading={blogApi.loading} error={blogApi.error} reload={blogApi.reload}
         addPost={blogApi.create} patchPost={blogApi.patch} deletePost={blogApi.remove} showToast={showToast} />} />
