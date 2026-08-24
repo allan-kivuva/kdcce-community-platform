@@ -1,5 +1,5 @@
 import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { Activity, BookOpen, Boxes, CalendarClock, ClipboardCheck, FileImage, Heart, HeartPulse, HeartHandshake, Home, Inbox, LayoutDashboard, LogOut, Package, Pill, User, UserRound, Users, Utensils } from 'lucide-react'
+import { Activity, BookOpen, Boxes, CalendarClock, ClipboardCheck, FileImage, HandHeart, Heart, HeartPulse, HeartHandshake, Home, Inbox, LayoutDashboard, LogOut, Package, Pill, User, UserRound, Users, Utensils } from 'lucide-react'
 import ThemeToggle from '../../theme/ThemeToggle'
 import { getStoredUser, clearSession } from '../../lib/api'
 
@@ -21,6 +21,7 @@ const staffMenu = [
   ['Feeding', '/admin/feeding', 'Utensils'],
   ['Inventory', '/admin/inventory', 'Boxes'],
   ['Activities', '/admin/activities', 'Activity'],
+  ['Assistance Requests', '/admin/assistance', 'HandHeart'],
   ['Donations', '/admin/donations', 'Heart'],
   ['Blog Posts', '/admin/blog', 'BookOpen'],
   ['Gallery', '/admin/gallery', 'FileImage'],
@@ -31,8 +32,9 @@ const staffMenu = [
 const volunteerMenu = [
   ['My Profile', '/admin/profile', 'User'],
   ['My Assignments', '/admin/assignments', 'CalendarClock'],
+  ['My Assistance Requests', '/admin/my-assistance', 'HandHeart'],
 ]
-const icons = { LayoutDashboard, Heart, HeartPulse, HeartHandshake, Home, Pill, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck, User, CalendarClock, Utensils, Boxes, Activity }
+const icons = { LayoutDashboard, Heart, HeartPulse, HeartHandshake, Home, Pill, BookOpen, FileImage, Users, Package, Inbox, UserRound, ClipboardCheck, User, CalendarClock, Utensils, Boxes, Activity, HandHeart }
 
 export default function Shell({ children }) {
   const navigate = useNavigate()

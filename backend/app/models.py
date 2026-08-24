@@ -772,6 +772,70 @@ class ActivityParticipant(db.Model):
         }
 
 
+ASSISTANCE_TYPES = ("Hospital Accompaniment", "Transportation", "Food Assistance", "Companionship", "Home Support", "Other")
+ASSISTANCE_PRIORITIES = ("Low", "Medium", "High", "Urgent")
+ASSISTANCE_STATUSES = ("Requested", "Matching", "Assigned", "Accepted", "In Progress", "Completed", "Cancelled")
+
+
+class AssistanceRequest(db.Model):
+    """Request -> Matching -> Assignment -> Acceptance -> In Progress ->
+    Completion, one status field, no enforced state machine (same
+    principle as every other lifecycle module here). The one thing that
+    IS enforced server-side: "Acceptance" is not just another status a
+    PATCH can set — it's its own endpoint (POST .../accept) that only the
+    assigned user can call, on their own request, moving Assigned ->
+    Accepted. See app/assistance/routes.py.
+
+    assigned_to_id follows the same rule as HomeVisit.assigned_to_id:
+    staff/admin, or a volunteer only once Verified. home_visit_id is an
+    optional link when a request turns into (or came from) a home visit —
+    traceability, not a hard coupling, same pattern as
+    StockMovement.donation_id."""
+
+    __tablename__ = "assistance_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    elderly_member_id = db.Column(db.Integer, db.ForeignKey("elderly_members.id"), nullable=False, index=True)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    home_visit_id = db.Column(db.Integer, db.ForeignKey("home_visits.id"), nullable=True)
+    request_type = db.Column(db.String(30), nullable=False)
+    priority = db.Column(db.String(10), nullable=False, default="Medium")
+    status = db.Column(db.String(20), nullable=False, default="Requested")
+    description = db.Column(db.Text, nullable=False)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    outcome_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    elderly_member = db.relationship("ElderlyMember")
+    requested_by = db.relationship("User", foreign_keys=[requested_by_id])
+    assigned_to = db.relationship("User", foreign_keys=[assigned_to_id])
+    home_visit = db.relationship("HomeVisit")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "elderly_member_id": self.elderly_member_id,
+            "elderly_member_name": self.elderly_member.full_name,
+            "elderly_member_code": self.elderly_member.member_id,
+            "requested_by": self.requested_by.name,
+            "assigned_to_id": self.assigned_to_id,
+            "assigned_to": self.assigned_to.name if self.assigned_to else None,
+            "home_visit_id": self.home_visit_id,
+            "request_type": self.request_type,
+            "priority": self.priority,
+            "status": self.status,
+            "description": self.description,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "outcome_notes": self.outcome_notes,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 class TeamMember(db.Model):
     __tablename__ = "team_members"
 
