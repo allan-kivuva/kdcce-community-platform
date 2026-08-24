@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import Shell from '../../components/admin/Shell'
+import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { apiFetch } from '../../lib/api'
 
@@ -48,7 +48,7 @@ export default function MyVolunteerProfile({ showToast }) {
     finally { setSaving(false) }
   }
 
-  return <Shell>
+  return <VolunteerShell>
     <div><div className="eyebrow">My account</div><h1 className="font-display text-3xl font-bold text-kGreen">My volunteer profile</h1></div>
 
     {loading ? <LoadingState label="profile" /> : error ? <ErrorState message={error} onRetry={load} /> : <>
@@ -66,5 +66,5 @@ export default function MyVolunteerProfile({ showToast }) {
         <button disabled={saving} className="btn-orange mt-2 w-fit disabled:opacity-60">{saving ? 'Saving…' : 'Save changes'}</button>
       </form>
     </>}
-  </Shell>
+  </VolunteerShell>
 }

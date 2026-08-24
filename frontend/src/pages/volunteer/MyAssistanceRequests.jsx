@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Pencil } from 'lucide-react'
-import Shell from '../../components/admin/Shell'
+import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import Modal from '../../components/admin/Modal'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
@@ -47,7 +47,7 @@ export default function MyAssistanceRequests({ showToast }) {
     finally { setAcceptingId(null) }
   }
 
-  return <Shell>
+  return <VolunteerShell>
     <div><div className="eyebrow">My assignments</div><h1 className="font-display text-3xl font-bold text-kGreen">Assistance requests</h1></div>
 
     {requestsApi.loading ? <LoadingState label="requests" /> : requestsApi.error ? <ErrorState message={requestsApi.error} onRetry={requestsApi.reload} /> : <div className="mt-7 grid gap-4">
@@ -70,5 +70,5 @@ export default function MyAssistanceRequests({ showToast }) {
     </div>}
 
     {editReq && <UpdateModal req={editReq} onClose={() => setEditReq(null)} onSaved={(id, data) => requestsApi.patch(id, data)} showToast={showToast} />}
-  </Shell>
+  </VolunteerShell>
 }

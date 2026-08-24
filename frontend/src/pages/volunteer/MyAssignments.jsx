@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
-import Shell from '../../components/admin/Shell'
+import VolunteerShell from '../../components/volunteer/VolunteerShell'
 import Modal from '../../components/admin/Modal'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
@@ -49,7 +49,7 @@ export default function MyAssignments({ showToast }) {
   const visitsApi = useApiResource('/api/home-visits', { listKey: 'visits', itemKey: 'visit' })
   const [editVisit, setEditVisit] = useState(null)
 
-  return <Shell>
+  return <VolunteerShell>
     <div><div className="eyebrow">My assignments</div><h1 className="font-display text-3xl font-bold text-kGreen">Home visits</h1></div>
 
     {visitsApi.loading ? <LoadingState label="assignments" /> : visitsApi.error ? <ErrorState message={visitsApi.error} onRetry={visitsApi.reload} /> : <div className="mt-7 grid gap-4">
@@ -67,5 +67,5 @@ export default function MyAssignments({ showToast }) {
     </div>}
 
     {editVisit && <UpdateModal visit={editVisit} onClose={() => setEditVisit(null)} onSaved={(id, data) => visitsApi.patch(id, data)} showToast={showToast} />}
-  </Shell>
+  </VolunteerShell>
 }
