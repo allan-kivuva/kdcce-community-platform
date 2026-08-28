@@ -49,7 +49,7 @@ export default function VolunteerDashboard({ profile }) {
   const upcoming = openAssignments.filter(x => x.when).sort((a, b) => new Date(a.when) - new Date(b.when)).slice(0, 5)
 
   return <VolunteerShell>
-    <div><div className="eyebrow">Welcome</div><h1 className="font-display text-3xl font-bold text-kGreen">{greeting()}, {user?.name?.split(' ')[0] || 'there'} 👋</h1>
+    <div><div className="eyebrow">Welcome</div><h1 className="font-display text-3xl font-bold text-kGreen">{greeting()}, {user?.name?.split(' ')[0] || 'there'}</h1>
       <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-kGreen/10 px-3 py-1 text-xs font-bold text-kGreen"><ShieldCheck size={13} /> {profile.status}</span>
     </div>
 

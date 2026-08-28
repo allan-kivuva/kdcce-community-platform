@@ -55,7 +55,7 @@ npm run dev
 
 ## Demo Login Credentials
 
-⚠️ **These credentials are for local development/demo purposes only. Do
+**These credentials are for local development/demo purposes only. Do
 not use them in production, and never seed a real deployment with a
 password this simple.**
 
