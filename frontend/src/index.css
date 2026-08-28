@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme tokens. Solid brand fills (kOrange/kGreen used as bg-* for buttons
+ * and colored panels) stay fixed across themes in tailwind.config.js since
+ * they always pair with white text and already read fine on a dark page.
+ * Everything here is for text/surface/border colors, which do need to
+ * adapt for contrast. .dark is applied to <html> by the theme script.
+ */
+:root {
+  --k-bg: 255 255 255;
+  --k-surface: 255 255 255;
+  --k-surface-2: 251 250 253;
+  --k-tint: 248 232 240;
+  --k-border: 226 232 240;
+  --k-border-soft: 241 245 249;
+  --k-ink: 21 34 43;
+  --k-muted: 102 116 125;
+  --k-accent-blue: 0 104 169;
+  --k-accent-pink: 192 0 89;
+}
+
+.dark {
+  --k-bg: 8 12 18;
+  --k-surface: 19 27 38;
+  --k-surface-2: 14 20 29;
+  --k-tint: 42 22 32;
+  --k-border: 37 48 62;
+  --k-border-soft: 28 37 48;
+  --k-ink: 232 238 242;
+  --k-muted: 148 163 176;
+  --k-accent-blue: 100 190 245;
+  --k-accent-pink: 255 111 168;
+}
+
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: rgb(var(--k-ink));
+  background: rgb(var(--k-bg));
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  color-scheme: light;
+}
+.dark { color-scheme: dark; }
+
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; background: rgb(var(--k-bg)); transition: background-color .2s ease, color .2s ease; }
+button, input, textarea, select { font: inherit; }
+img { display: block; }
+
+.section-kicker {
+  font-family: Poppins, sans-serif;
+  font-style: italic;
+  color: rgb(var(--k-accent-pink));
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.eyebrow {
+  font-family: Poppins, sans-serif;
+  font-style: italic;
+  color: rgb(var(--k-accent-blue));
+  font-weight: 600;
+}
+
+.text-balance { text-wrap: balance; }
+
+.glass-nav { box-shadow: 0 1px 0 rgba(0,104,169,.10); }
+.dark .glass-nav { box-shadow: 0 1px 0 rgba(255,255,255,.06); }
+
+.container-k { width: min(1180px, calc(100% - 2rem)); margin-inline: auto; }
+
+@media (min-width: 768px) {
+  .container-k { width: min(1180px, calc(100% - 3rem)); }
+}
+
+.hero-overlay {
+  background: linear-gradient(90deg, rgba(7,25,40,.88) 0%, rgba(7,25,40,.57) 48%, rgba(7,25,40,.12) 100%);
+}
+
+.input-k {
+  @apply w-full rounded-xl border border-kBorder bg-kSurface px-4 py-3 text-kInk outline-none transition placeholder:text-kMuted disabled:cursor-not-allowed disabled:opacity-60;
+}
+.input-k:focus { border-color: rgb(var(--k-accent-pink)); box-shadow: 0 0 0 3px rgba(192,0,89,.15); }
+.dark .input-k:focus { box-shadow: 0 0 0 3px rgba(255,111,168,.18); }
+.input-k:focus-visible { outline: none; }
+
+.btn-orange { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-kOrange px-5 py-3 font-semibold text-white transition hover:bg-kOrangeDark disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-kOrange; }
+.btn-outline { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/70 px-5 py-3 font-semibold text-white transition hover:bg-white hover:text-kGreen disabled:cursor-not-allowed disabled:opacity-60; }
+.btn-green { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-kGreen px-5 py-3 font-semibold text-white transition hover:bg-kGreen2 disabled:cursor-not-allowed disabled:opacity-60; }
+
+.card-k { @apply rounded-2xl border border-kBorderSoft bg-kSurface shadow-soft dark:shadow-none; }
+
+*:focus-visible { outline: 2px solid rgb(var(--k-accent-blue)); outline-offset: 2px; }
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: rgb(var(--k-surface-2)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--k-border)); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--k-muted)); }
+
+/* Printed pages (e.g. the donation receipt) should always render in light
+   colors regardless of the active site theme — paper has no dark mode. */
+@media print {
+  .dark, :root {
+    --k-bg: 255 255 255;
+    --k-surface: 255 255 255;
+    --k-surface-2: 251 250 253;
+    --k-tint: 248 232 240;
+    --k-border: 226 232 240;
+    --k-border-soft: 241 245 249;
+    --k-ink: 21 34 43;
+    --k-muted: 102 116 125;
+    --k-accent-blue: 0 104 169;
+    --k-accent-pink: 192 0 89;
+  }
+}
+
+/*
+ * Retrofit for the small set of neutral Tailwind slate utilities and the
+ * kGreen/kOrange *text* usages already used throughout the app, so every
+ * existing heading/border/label adapts without touching each call site.
+ * (bg-kOrange / bg-kGreen — solid fills paired with white text — are left
+ * untouched on purpose; they already read fine on a dark page.)
+ */
+.dark .text-kGreen { color: rgb(var(--k-accent-blue)); }
+.dark .text-kOrange { color: rgb(var(--k-accent-pink)); }
+.dark .border-kOrange { border-color: rgb(var(--k-accent-pink)); }
+.dark .border-slate-50,
+.dark .border-slate-100 { border-color: rgb(var(--k-border-soft)); }
+.dark .border-slate-200,
+.dark .border-slate-300 { border-color: rgb(var(--k-border)); }
+.dark .bg-slate-50,
+.dark .bg-slate-100 { background-color: rgb(var(--k-border-soft)); }
+.dark .bg-slate-200 { background-color: rgb(var(--k-border)); }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(var(--k-border-soft)); }
+.dark .text-slate-400 { color: rgb(var(--k-muted)); }
+.dark .text-slate-600 { color: rgb(148 163 184); }
