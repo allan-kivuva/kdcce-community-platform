@@ -148,6 +148,30 @@ def test_staff_can_fully_edit_a_request(client, make_staff_user, auth_header):
     assert body["status"] == "Matching"
 
 
+def test_updating_a_request_is_audited(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    req = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(token)).get_json()["request"]
+
+    resp = client.patch(f"/api/assistance-requests/{req['id']}", json={"priority": "High", "status": "Matching"}, headers=auth_header(token))
+    assert resp.status_code == 200
+
+    logs_resp = client.get(
+        f"/api/audit-logs?resource_type=assistance_request&resource_id={req['id']}", headers=auth_header(token)
+    )
+    logs = logs_resp.get_json()["audit_logs"]
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["action"] == "update"
+    assert log["resource_id"] == req["id"]
+    assert log["before"]["status"] == "Requested"
+    assert log["after"]["status"] == "Matching"
+    for snapshot in (log["before"], log["after"]):
+        for key in snapshot:
+            assert "password" not in key.lower()
+            assert "token" not in key.lower()
+
+
 def test_assignee_cannot_set_status_to_accepted_via_patch(client, make_user, make_staff_user, auth_header):
     _, admin_token = make_staff_user("admin")
     member = _register_member(client, admin_token, auth_header)
@@ -267,6 +291,58 @@ def test_request_rejects_unknown_home_visit(client, make_staff_user, auth_header
     _, token = make_staff_user("admin")
     member = _register_member(client, token, auth_header)
     resp = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], "home_visit_id": 999, **VALID}, headers=auth_header(token))
+    assert resp.status_code == 400
+
+
+# ---------- Staff-private notes ----------
+
+def test_staff_can_set_staff_notes_on_create(client, make_staff_user, auth_header):
+    _, token = make_staff_user("staff")
+    member = _register_member(client, token, auth_header)
+    resp = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], **VALID, "staff_notes": "Confidential note"}, headers=auth_header(token))
+    assert resp.status_code == 201
+    assert resp.get_json()["request"]["staff_notes"] == "Confidential note"
+
+
+def test_staff_notes_never_appear_in_the_assigned_volunteers_own_view(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token)
+    req_id = client.post(
+        "/api/assistance-requests",
+        json={"elderly_member_id": member["id"], **VALID, "assigned_to_id": vol["id"], "staff_notes": "Confidential — do not share with volunteer"},
+        headers=auth_header(admin_token),
+    ).get_json()["request"]["id"]
+
+    body = client.get(f"/api/assistance-requests/{req_id}", headers=auth_header(vol_token)).get_json()["request"]
+    assert "staff_notes" not in body
+
+    listed = client.get("/api/assistance-requests", headers=auth_header(vol_token)).get_json()["requests"]
+    assert all("staff_notes" not in r for r in listed)
+
+    accepted = client.post(f"/api/assistance-requests/{req_id}/accept", headers=auth_header(vol_token)).get_json()["request"]
+    assert "staff_notes" not in accepted
+
+
+def test_staff_notes_do_appear_for_admin_and_staff(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, staff_token = make_staff_user("staff", email="reqnotesviewer@example.com")
+    member = _register_member(client, admin_token, auth_header)
+    req_id = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], **VALID, "staff_notes": "Internal note"}, headers=auth_header(admin_token)).get_json()["request"]["id"]
+
+    for token in (admin_token, staff_token):
+        body = client.get(f"/api/assistance-requests/{req_id}", headers=auth_header(token)).get_json()["request"]
+        assert body["staff_notes"] == "Internal note"
+
+
+def test_volunteer_cannot_set_staff_notes_via_their_own_patch(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token, email="reqnotes-writer@example.com")
+    req_id = client.post("/api/assistance-requests", json={"elderly_member_id": member["id"], **VALID, "assigned_to_id": vol["id"]}, headers=auth_header(admin_token)).get_json()["request"]["id"]
+    client.post(f"/api/assistance-requests/{req_id}/accept", headers=auth_header(vol_token))
+
+    resp = client.patch(f"/api/assistance-requests/{req_id}", json={"status": "Started", "staff_notes": "Trying to set my own note"}, headers=auth_header(vol_token))
     assert resp.status_code == 400
 
 

@@ -39,6 +39,133 @@ def test_unauthenticated_cannot_access_incidents(client):
     assert resp.status_code == 401
 
 
+# ---------- Assignment ----------
+
+def _verified_volunteer(client, make_user, auth_header, admin_token, email="incident-vol@example.com"):
+    user, access_token, _ = make_user(email=email, name="Incident Volunteer")
+    volunteers = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"]
+    vid = next(v for v in volunteers if v["email"] == email)["id"]
+    client.patch(f"/api/volunteers/{vid}", json={"status": "Verified"}, headers=auth_header(admin_token))
+    return user, access_token
+
+
+def test_staff_can_create_incident_pre_assigned(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, staff_token = make_staff_user("staff", email="assignee@example.com")
+    member = _register_member(client, admin_token, auth_header)
+    staff_user = client.get("/api/incidents/assignees", headers=auth_header(admin_token)).get_json()["assignees"]
+    staff_id = next(a["id"] for a in staff_user if a["name"] == "Staffer")
+
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], "assigned_to_id": staff_id, **VALID}, headers=auth_header(admin_token))
+    assert resp.status_code == 201
+    body = resp.get_json()["incident"]
+    assert body["assigned_to_id"] == staff_id
+    assert body["assigned_to"] == "Staffer"
+
+
+def test_admin_can_assign_an_existing_incident(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, staff_token = make_staff_user("staff", email="assignee2@example.com")
+    member = _register_member(client, admin_token, auth_header)
+    incident_id = client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(admin_token)).get_json()["incident"]["id"]
+
+    staff_id = next(a["id"] for a in client.get("/api/incidents/assignees", headers=auth_header(admin_token)).get_json()["assignees"] if a["name"] == "Staffer")
+    resp = client.patch(f"/api/incidents/{incident_id}", json={"assigned_to_id": staff_id}, headers=auth_header(admin_token))
+    assert resp.status_code == 200
+    assert resp.get_json()["incident"]["assigned_to_id"] == staff_id
+
+
+def test_assignment_can_be_cleared(client, make_staff_user, auth_header):
+    admin_user, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    incident_id = client.post("/api/incidents", json={"elderly_member_id": member["id"], "assigned_to_id": admin_user["id"], **VALID}, headers=auth_header(admin_token)).get_json()["incident"]["id"]
+
+    resp = client.patch(f"/api/incidents/{incident_id}", json={"assigned_to_id": None}, headers=auth_header(admin_token))
+    assert resp.status_code == 200
+    assert resp.get_json()["incident"]["assigned_to_id"] is None
+
+
+def test_assignment_rejects_a_volunteer(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, _ = _verified_volunteer(client, make_user, auth_header, admin_token)
+
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], "assigned_to_id": vol["id"], **VALID}, headers=auth_header(admin_token))
+    assert resp.status_code == 400
+
+
+def test_assignment_rejects_unknown_user(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    resp = client.post("/api/incidents", json={"elderly_member_id": member["id"], "assigned_to_id": 999999, **VALID}, headers=auth_header(admin_token))
+    assert resp.status_code == 400
+
+
+def test_list_filters_by_assigned_to(client, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, _ = make_staff_user("staff", email="filterassignee@example.com")
+    member = _register_member(client, admin_token, auth_header)
+    staff_id = next(a["id"] for a in client.get("/api/incidents/assignees", headers=auth_header(admin_token)).get_json()["assignees"] if a["name"] == "Staffer")
+
+    client.post("/api/incidents", json={"elderly_member_id": member["id"], "assigned_to_id": staff_id, **VALID}, headers=auth_header(admin_token))
+    client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(admin_token))  # unassigned
+
+    resp = client.get(f"/api/incidents?assigned_to_id={staff_id}", headers=auth_header(admin_token))
+    incidents = resp.get_json()["incidents"]
+    assert len(incidents) == 1
+    assert incidents[0]["assigned_to_id"] == staff_id
+
+
+def test_assignees_endpoint_lists_only_admin_and_staff(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, _ = make_staff_user("staff", email="listedstaff@example.com")
+    _verified_volunteer(client, make_user, auth_header, admin_token, email="notlisted-vol@example.com")
+
+    resp = client.get("/api/incidents/assignees", headers=auth_header(admin_token))
+    assert resp.status_code == 200
+    people = resp.get_json()["assignees"]
+    assert all(p["role"] in ("admin", "staff") for p in people)
+    assert "Incident Volunteer" not in [p["name"] for p in people]
+
+
+def test_volunteer_cannot_list_incident_assignees(client, make_user, auth_header):
+    _, token, _ = make_user(email="novolassignees@example.com")
+    resp = client.get("/api/incidents/assignees", headers=auth_header(token))
+    assert resp.status_code == 403
+
+
+def test_staff_can_call_assignees_endpoint(client, make_staff_user, auth_header):
+    _, token = make_staff_user("staff")
+    resp = client.get("/api/incidents/assignees", headers=auth_header(token))
+    assert resp.status_code == 200
+
+
+# ---------- Volunteer privacy is preserved (no new access granted) ----------
+
+def test_volunteer_still_cannot_view_a_specific_incident(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    incident_id = client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(admin_token)).get_json()["incident"]["id"]
+
+    _, vol_token, _ = make_user(email="stillnoaccess@example.com")
+    resp = client.get(f"/api/incidents/{incident_id}", headers=auth_header(vol_token))
+    assert resp.status_code == 403
+
+
+def test_assigning_an_incident_to_a_volunteer_is_impossible_even_indirectly(client, make_user, make_staff_user, auth_header):
+    """Belt-and-braces: even if a caller tried assigning a concern to a
+    volunteer through the update path (not just create), it's rejected —
+    a volunteer must never end up as an incident's assignee by any route,
+    since they have no way to ever retrieve it afterward."""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, _ = _verified_volunteer(client, make_user, auth_header, admin_token, email="stillnoassign@example.com")
+    incident_id = client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(admin_token)).get_json()["incident"]["id"]
+
+    resp = client.patch(f"/api/incidents/{incident_id}", json={"assigned_to_id": vol["id"]}, headers=auth_header(admin_token))
+    assert resp.status_code == 400
+
+
 def test_create_rejects_unknown_member(client, make_staff_user, auth_header):
     _, token = make_staff_user("admin")
     resp = client.post("/api/incidents", json={"elderly_member_id": 999, **VALID}, headers=auth_header(token))
@@ -133,6 +260,35 @@ def test_staff_can_resolve_an_incident(client, make_staff_user, auth_header):
     body = resp.get_json()["incident"]
     assert body["status"] == "Resolved"
     assert body["resolution_notes"] == "Minor bruise, no further action needed"
+
+
+def test_resolving_an_incident_is_audited(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = _register_member(client, token, auth_header)
+    incident = client.post("/api/incidents", json={"elderly_member_id": member["id"], **VALID}, headers=auth_header(token)).get_json()["incident"]
+
+    resp = client.patch(
+        f"/api/incidents/{incident['id']}",
+        json={"status": "Resolved", "resolution_notes": "Minor bruise, no further action needed"},
+        headers=auth_header(token),
+    )
+    assert resp.status_code == 200
+
+    logs_resp = client.get(
+        f"/api/audit-logs?resource_type=incident&resource_id={incident['id']}", headers=auth_header(token)
+    )
+    logs = logs_resp.get_json()["audit_logs"]
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["action"] == "update"
+    assert log["resource_id"] == incident["id"]
+    assert log["before"]["status"] == "Open"
+    assert log["after"]["status"] == "Resolved"
+    assert log["after"]["resolution_notes"] == "Minor bruise, no further action needed"
+    for snapshot in (log["before"], log["after"]):
+        for key in snapshot:
+            assert "password" not in key.lower()
+            assert "token" not in key.lower()
 
 
 def test_update_rejects_invalid_status(client, make_staff_user, auth_header):

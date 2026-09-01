@@ -1,21 +1,34 @@
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity
 from marshmallow import ValidationError
 
+from ..audit.service import log_action
 from ..auth.decorators import roles_required
 from ..extensions import db
-from ..models import (
-    OPA, AssignmentAttachment, AssistanceRequest, Attendance, ElderlyMember, HealthRecord, HomeVisit,
-    Incident, Meal, MealAttendance, Medication, MedicationAdministration,
-)
-from ..utils import get_or_404, validation_error_response
+from ..geocoding.service import geocode_address
+from ..models import OPA, ElderlyMember, utcnow
+from ..utils import csv_response, get_or_404, validation_error_response
 from .schemas import OPASchema, ElderlyMemberSchema
+from .service import build_member_timeline_events
 
 bp = Blueprint("elderly", __name__)
 
 opa_schema = OPASchema()
 member_schema = ElderlyMemberSchema()
+
+_SNAPSHOT_FIELDS = ("member_id", "full_name", "status", "opa_id", "location", "gender")
+
+
+def _snapshot(member):
+    snapshot = {}
+    for field in _SNAPSHOT_FIELDS:
+        value = getattr(member, field)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        snapshot[field] = value
+    return snapshot
 
 
 # ---------- OPAs (community groups) ----------
@@ -96,6 +109,32 @@ def list_members():
     return jsonify(members=[m.to_dict() for m in members]), 200
 
 
+@bp.post("/api/elderly/export")
+@roles_required("admin", "staff")
+def export_members():
+    """Bulk export — {"ids": [...]} exports exactly those records; an
+    omitted/empty ids list exports every member (same permission as the
+    plain list endpoint, since this returns nothing list_members()
+    doesn't already return). Coordinates are never included — this is
+    the same admin-only member roster the list page already shows, not
+    the map's data path."""
+    payload = request.get_json(silent=True) or {}
+    ids = payload.get("ids") or []
+
+    query = ElderlyMember.query
+    if ids:
+        query = query.filter(ElderlyMember.id.in_(ids))
+    members = query.order_by(ElderlyMember.full_name.asc()).all()
+
+    rows = [
+        [m.member_id, m.full_name, m.gender, m.date_of_birth.isoformat() if m.date_of_birth else "", m.location or "", m.status]
+        for m in members
+    ]
+    log_action(int(get_jwt_identity()), "export", "elderly_member", len(members), after={"count": len(members)})
+    db.session.commit()
+    return csv_response("elderly_members_export.csv", ["Member ID", "Full Name", "Gender", "Date of Birth", "Location", "Status"], rows)
+
+
 @bp.get("/api/elderly/<int:member_id>")
 @roles_required("admin", "staff")
 def get_member(member_id):
@@ -117,79 +156,7 @@ def get_member_timeline(member_id):
     IN-clause batch lookup, not one query per visit/request, to avoid
     turning that into real N+1."""
     member = get_or_404(ElderlyMember, member_id)
-
-    attendance = Attendance.query.filter_by(elderly_member_id=member_id).all()
-    health = HealthRecord.query.filter_by(elderly_member_id=member_id).all()
-    administrations = (
-        db.session.query(MedicationAdministration, Medication.name)
-        .join(Medication, MedicationAdministration.medication_id == Medication.id)
-        .filter(Medication.elderly_member_id == member_id).all()
-    )
-    visits = HomeVisit.query.filter_by(elderly_member_id=member_id).all()
-    requests_ = AssistanceRequest.query.filter_by(elderly_member_id=member_id).all()
-    incidents = Incident.query.filter_by(elderly_member_id=member_id).all()
-    meals = (
-        db.session.query(MealAttendance, Meal.meal_type, Meal.meal_date)
-        .join(Meal, MealAttendance.meal_id == Meal.id)
-        .filter(MealAttendance.elderly_member_id == member_id).all()
-    )
-
-    photo_assignment_ids = {("home_visit", v.id) for v in visits} | {("assistance_request", r.id) for r in requests_}
-    attachments = set()
-    if photo_assignment_ids:
-        rows = AssignmentAttachment.query.filter(
-            db.tuple_(AssignmentAttachment.assignment_type, AssignmentAttachment.assignment_id).in_(photo_assignment_ids)
-        ).all()
-        attachments = {(a.assignment_type, a.assignment_id) for a in rows}
-
-    events = []
-    for a in attendance:
-        events.append({
-            "type": "attendance", "timestamp": a.check_in_at.isoformat(), "title": "Attendance",
-            "details": {"check_in_at": a.check_in_at.isoformat(), "check_out_at": a.check_out_at.isoformat() if a.check_out_at else None, "notes": a.notes},
-        })
-    for h in health:
-        events.append({
-            "type": "health", "timestamp": h.recorded_at.isoformat(), "title": "Health Observation",
-            "details": {
-                "temperature_celsius": float(h.temperature_celsius) if h.temperature_celsius is not None else None,
-                "mood": h.mood, "wellbeing": h.wellbeing, "observations": h.observations,
-                "follow_up_required": h.follow_up_required,
-            },
-        })
-    for m, medication_name in administrations:
-        events.append({
-            "type": "medication", "timestamp": m.administered_at.isoformat(), "title": "Medication",
-            "details": {"medication_name": medication_name, "status": m.status, "notes": m.notes},
-        })
-    for v in visits:
-        events.append({
-            "type": "home_visit", "timestamp": v.created_at.isoformat(), "title": "Home Visit",
-            "details": {
-                "assigned_to": v.assigned_to.name if v.assigned_to else None, "status": v.status,
-                "reason": v.reason, "observations": v.observations, "has_photo": ("home_visit", v.id) in attachments,
-            },
-        })
-    for r in requests_:
-        events.append({
-            "type": "assistance", "timestamp": r.created_at.isoformat(), "title": f"Assistance — {r.request_type}",
-            "details": {
-                "assigned_to": r.assigned_to.name if r.assigned_to else None, "status": r.status,
-                "description": r.description, "has_photo": ("assistance_request", r.id) in attachments,
-            },
-        })
-    for i in incidents:
-        events.append({
-            "type": "incident", "timestamp": i.occurred_at.isoformat(), "title": f"Incident — {i.incident_type}",
-            "details": {"severity": i.severity, "status": i.status, "description": i.description},
-        })
-    for ma, meal_type, meal_date in meals:
-        events.append({
-            "type": "meal", "timestamp": ma.created_at.isoformat(), "title": f"Feeding — {meal_type}",
-            "details": {"meal_date": meal_date.isoformat(), "notes": ma.notes},
-        })
-
-    events.sort(key=lambda e: e["timestamp"], reverse=True)
+    events = build_member_timeline_events(member_id)
 
     page = max(request.args.get("page", 1, type=int), 1)
     per_page = min(max(request.args.get("per_page", 20, type=int), 1), 100)
@@ -221,6 +188,7 @@ def create_member():
     db.session.add(member)
     db.session.flush()  # assigns member.id without committing yet
     member.member_id = _make_member_id(member)
+    log_action(int(get_jwt_identity()), "create", "elderly_member", member.id, after=_snapshot(member))
     db.session.commit()
     return jsonify(member=member.to_dict()), 201
 
@@ -238,16 +206,54 @@ def update_member(member_id):
     if "opa_id" in data and data["opa_id"] is not None and db.session.get(OPA, data["opa_id"]) is None:
         return jsonify(error="Validation failed", details={"opa_id": ["OPA not found"]}), 400
 
+    before = _snapshot(member)
     for field, value in data.items():
         setattr(member, field, value)
+    after = _snapshot(member)
+    if after != before:
+        log_action(int(get_jwt_identity()), "update", "elderly_member", member.id, before=before, after=after)
     db.session.commit()
     return jsonify(member=member.to_dict()), 200
+
+
+@bp.post("/api/elderly/<int:member_id>/geocode")
+@roles_required("admin", "staff")
+def geocode_member(member_id):
+    """Opt-in, admin/staff-triggered only — never run automatically on
+    create/update. Skips re-geocoding (returns the cached result) unless
+    ?force=true is passed, so editing an unrelated field never silently
+    re-spends a real geocoder's rate limit once one is wired up."""
+    member = get_or_404(ElderlyMember, member_id)
+    force = request.args.get("force", "false").lower() == "true"
+
+    if member.geocoded_at is not None and not force:
+        return jsonify(member=member.to_dict(include_coordinates=True), geocoded=False, cached=True), 200
+
+    if not member.location or not member.location.strip():
+        return jsonify(error="This member has no location text to geocode"), 400
+
+    result = geocode_address(member.location)
+    if result is None:
+        return jsonify(error="Could not geocode this address"), 422
+
+    before = {"latitude": member.latitude, "longitude": member.longitude}
+    member.latitude = result.latitude
+    member.longitude = result.longitude
+    member.geocoded_at = utcnow()
+    member.geocode_source = result.source
+    member.geocode_accuracy = result.accuracy
+    after = {"latitude": member.latitude, "longitude": member.longitude}
+
+    log_action(int(get_jwt_identity()), "geocode", "elderly_member", member.id, before=before, after=after)
+    db.session.commit()
+    return jsonify(member=member.to_dict(include_coordinates=True), geocoded=True, cached=False), 200
 
 
 @bp.delete("/api/elderly/<int:member_id>")
 @roles_required("admin")
 def delete_member(member_id):
     member = get_or_404(ElderlyMember, member_id)
+    log_action(int(get_jwt_identity()), "delete", "elderly_member", member.id, before=_snapshot(member))
     db.session.delete(member)
     db.session.commit()
     return "", 204

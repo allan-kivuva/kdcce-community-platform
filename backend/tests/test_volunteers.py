@@ -125,6 +125,31 @@ def test_staff_can_verify_a_volunteer(client, make_user, make_staff_user, auth_h
     assert body["reviewed_at"] is not None
 
 
+def test_verifying_a_volunteer_is_audited(client, make_user, make_staff_user, auth_header):
+    make_user(email="vol7audit@example.com")
+    _, admin_token = make_staff_user("admin", email="admin-audit-vol@example.com")
+    volunteer_id = client.get("/api/volunteers", headers=auth_header(admin_token)).get_json()["volunteers"][0]["id"]
+
+    resp = client.patch(f"/api/volunteers/{volunteer_id}", json={"status": "Verified"}, headers=auth_header(admin_token))
+    assert resp.status_code == 200
+
+    logs_resp = client.get(
+        f"/api/audit-logs?resource_type=volunteer_profile&resource_id={volunteer_id}", headers=auth_header(admin_token)
+    )
+    logs = logs_resp.get_json()["audit_logs"]
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["action"] == "verify"
+    assert log["resource_type"] == "volunteer_profile"
+    assert log["resource_id"] == volunteer_id
+    assert log["before"]["status"] == "Pending"
+    assert log["after"]["status"] == "Verified"
+    for snapshot in (log["before"], log["after"]):
+        for key in snapshot:
+            assert "password" not in key.lower()
+            assert "token" not in key.lower()
+
+
 def test_status_persists_across_partial_edit_by_staff(client, make_user, make_staff_user, auth_header):
     """Regression: PATCHing without status must not reset it back to Pending."""
     make_user(email="vol8@example.com")

@@ -1,13 +1,21 @@
 import { useState } from 'react'
-import { LockKeyhole, ShieldCheck, AlertCircle } from 'lucide-react'
+import { LockKeyhole, ShieldCheck, AlertCircle, KeyRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import ThemeToggle from '../theme/ThemeToggle'
 import { apiFetch, setSession, ApiError } from '../lib/api'
+
+function homeFor(role) {
+  if (role === 'volunteer') return '/volunteer'
+  if (role === 'family') return '/family'
+  return '/admin'
+}
 
 export default function AdminLogin(){
   const navigate = useNavigate()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
+  const [challengeToken, setChallengeToken] = useState(null)
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false)
 
   async function handleSubmit(e){
     e.preventDefault()
@@ -15,15 +23,39 @@ export default function AdminLogin(){
     setSigningIn(true)
     const f = new FormData(e.target)
     try {
-      const { access_token, refresh_token, user } = await apiFetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         auth: false,
         body: { email: f.get('email'), password: f.get('password') }
       })
-      setSession(access_token, user, refresh_token)
-      navigate(user.role === 'volunteer' ? '/volunteer' : '/admin')
+      if (res.two_factor_required) {
+        setChallengeToken(res.challenge_token)
+        setSigningIn(false)
+        return
+      }
+      setSession(res.access_token, res.user, res.refresh_token)
+      navigate(homeFor(res.user.role))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign in failed. Please try again.')
+      setSigningIn(false)
+    }
+  }
+
+  async function handleOtpSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setSigningIn(true)
+    const f = new FormData(e.target)
+    try {
+      const path = useRecoveryCode ? '/api/auth/2fa/recovery' : '/api/auth/2fa/verify-login'
+      const body = useRecoveryCode
+        ? { challenge_token: challengeToken, recovery_code: f.get('recovery_code') }
+        : { challenge_token: challengeToken, code: f.get('code') }
+      const { access_token, refresh_token, user } = await apiFetch(path, { method: 'POST', auth: false, body })
+      setSession(access_token, user, refresh_token)
+      navigate(homeFor(user.role))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Verification failed. Please try again.')
       setSigningIn(false)
     }
   }
@@ -31,5 +63,36 @@ export default function AdminLogin(){
   return <div className="relative min-h-[75vh] overflow-hidden py-20">
     <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/admin-login-bg.jpg')" }} />
     <div className="absolute inset-0 bg-gradient-to-b from-kInk/80 via-kInk/70 to-kInk/85" />
-    <div className="relative mx-auto max-w-md px-5"><div className="mb-4 flex justify-end"><ThemeToggle /></div><div className="mb-6 text-center"><img src="/images/logo.png" alt="KDCCE" className="mx-auto h-20 w-auto object-contain"/><div className="mx-auto mt-4 grid h-12 w-12 place-items-center rounded-2xl bg-kGreen text-white"><ShieldCheck/></div><h1 className="mt-5 font-display text-3xl font-bold text-white">Staff portal</h1><p className="mt-2 text-sm text-white/80">Sign in with your staff, admin, or volunteer account.</p></div><form className="card-k p-7" onSubmit={handleSubmit}>{error && <div className="mb-5 flex items-start gap-2 rounded-xl bg-kTint p-3 text-sm text-kOrange"><AlertCircle size={16} className="mt-0.5 shrink-0"/> {error}</div>}<label className="text-sm font-semibold">Email<input name="email" className="input-k mt-2" type="email" placeholder="staff@kdcce.org" required/></label><label className="mt-4 block text-sm font-semibold">Password<input name="password" className="input-k mt-2" type="password" placeholder="••••••••" required/></label><button disabled={signingIn} className="btn-orange mt-6 w-full disabled:opacity-60"><LockKeyhole size={16}/> {signingIn ? 'Signing in…' : 'Sign in'}</button></form></div></div>
+    <div className="relative mx-auto max-w-md px-5">
+      <div className="mb-4 flex justify-end"><ThemeToggle /></div>
+      <div className="mb-6 text-center">
+        <img src="/images/logo.png" alt="KDCCE" className="mx-auto h-20 w-auto object-contain"/>
+        <div className="mx-auto mt-4 grid h-12 w-12 place-items-center rounded-2xl bg-kGreen text-white">{challengeToken ? <KeyRound /> : <ShieldCheck/>}</div>
+        <h1 className="mt-5 font-display text-3xl font-bold text-white">{challengeToken ? 'Verify it\'s you' : 'Staff portal'}</h1>
+        <p className="mt-2 text-sm text-white/80">{challengeToken ? 'Enter the code from your authenticator app.' : 'Sign in with your staff, admin, or volunteer account.'}</p>
+      </div>
+
+      {!challengeToken ? (
+        <form key="credentials" className="card-k p-7" onSubmit={handleSubmit}>
+          {error && <div className="mb-5 flex items-start gap-2 rounded-xl bg-kTint p-3 text-sm text-kOrange"><AlertCircle size={16} className="mt-0.5 shrink-0"/> {error}</div>}
+          <label className="text-sm font-semibold">Email<input name="email" className="input-k mt-2" type="email" placeholder="staff@kdcce.org" required/></label>
+          <label className="mt-4 block text-sm font-semibold">Password<input name="password" className="input-k mt-2" type="password" placeholder="••••••••" required/></label>
+          <button disabled={signingIn} className="btn-orange mt-6 w-full disabled:opacity-60"><LockKeyhole size={16}/> {signingIn ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+      ) : (
+        <form key="otp" className="card-k p-7" onSubmit={handleOtpSubmit}>
+          {error && <div className="mb-5 flex items-start gap-2 rounded-xl bg-kTint p-3 text-sm text-kOrange"><AlertCircle size={16} className="mt-0.5 shrink-0"/> {error}</div>}
+          {!useRecoveryCode ? (
+            <label key="code" className="text-sm font-semibold">6-digit code<input name="code" className="input-k mt-2" inputMode="numeric" maxLength={6} placeholder="123456" required autoFocus/></label>
+          ) : (
+            <label key="recovery_code" className="text-sm font-semibold">Recovery code<input name="recovery_code" className="input-k mt-2" placeholder="xxxxx-xxxxx" required autoFocus/></label>
+          )}
+          <button disabled={signingIn} className="btn-orange mt-6 w-full disabled:opacity-60"><KeyRound size={16}/> {signingIn ? 'Verifying…' : 'Verify'}</button>
+          <button type="button" onClick={() => { setUseRecoveryCode(v => !v); setError('') }} className="mt-4 w-full text-center text-xs font-semibold text-kMuted hover:text-kOrange">
+            {useRecoveryCode ? 'Use my authenticator app instead' : "Can't access your authenticator? Use a recovery code"}
+          </button>
+        </form>
+      )}
+    </div>
+  </div>
 }

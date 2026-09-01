@@ -2,9 +2,10 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app import create_app
+from app.achievements.seed_data import DEFAULT_ACHIEVEMENTS
 from app.config import TestConfig
 from app.extensions import db as _db
-from app.models import User
+from app.models import Achievement, User
 
 
 @pytest.fixture()
@@ -12,6 +13,15 @@ def app():
     app = create_app(TestConfig)
     with app.app_context():
         _db.create_all()
+        # db.create_all() builds schema only, never runs migrations — so
+        # the achievement-definition seed step that lives in this
+        # feature's own migration (e29a3d056e47) never applies to this
+        # in-memory test database. Seed the identical rows here from the
+        # same DEFAULT_ACHIEVEMENTS source, so tests exercise achievements
+        # against the same starter set a real `flask db upgrade` produces.
+        for row in DEFAULT_ACHIEVEMENTS:
+            _db.session.add(Achievement(**row, active=True))
+        _db.session.commit()
         yield app
         _db.session.remove()
         _db.drop_all()

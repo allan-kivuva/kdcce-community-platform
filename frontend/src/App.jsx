@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import About from './pages/About'
 import Programs from './pages/Programs'
 import ProgramDetail from './pages/ProgramDetail'
+import Campaigns from './pages/Campaigns'
 import Gallery from './pages/Gallery'
 import Blog from './pages/Blog'
 import BlogPost from './pages/BlogPost'
@@ -17,6 +18,8 @@ import BecomeAVolunteer from './pages/BecomeAVolunteer'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
 import VolunteerPortal from './pages/VolunteerPortal'
+import FamilyPortal from './pages/FamilyPortal'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -26,7 +29,7 @@ function ScrollToTop() {
 
 export default function App() {
   const { pathname } = useLocation()
-  const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/volunteer')
+  const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/volunteer') || pathname.startsWith('/family')
 
   return <>
     <ScrollToTop />
@@ -37,6 +40,7 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/programs" element={<Programs />} />
         <Route path="/programs/:id" element={<ProgramDetail />} />
+        <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:id" element={<BlogPost />} />
@@ -46,8 +50,9 @@ export default function App() {
         <Route path="/crafts" element={<Crafts />} />
         <Route path="/become-a-volunteer" element={<BecomeAVolunteer />} />
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/*" element={<AdminDashboard />} />
-        <Route path="/volunteer/*" element={<VolunteerPortal />} />
+        <Route path="/admin/*" element={<ProtectedRoute roles={['admin', 'staff']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/volunteer/*" element={<ProtectedRoute roles={['volunteer']}><VolunteerPortal /></ProtectedRoute>} />
+        <Route path="/family/*" element={<ProtectedRoute roles={['family']}><FamilyPortal /></ProtectedRoute>} />
       </Routes>
     </main>
     {!isAdminArea && <div className="print:hidden"><Footer /></div>}

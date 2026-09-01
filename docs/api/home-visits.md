@@ -16,20 +16,36 @@ A volunteer's access additionally requires their **current**
 relying only on "is this visit assigned to me" would leave a rejected
 volunteer with access to visits from before their rejection.
 
-Home visit object:
+Home visit object (as seen by `admin`/`staff` — see `staff_notes` below):
 ```json
 {
   "id": 1, "elderly_member_id": 1, "elderly_member_name": "Mary Achieng",
   "elderly_member_code": "KDCCE-2026-0001", "requested_by": "Jane Staffer",
   "assigned_to_id": 4, "assigned_to": "Grace Mwangi",
+  "recurring_series_id": null,
   "priority": "High", "status": "Assigned",
   "reason": "Unable to attend the centre due to mobility issues",
   "scheduled_at": null, "completed_at": null,
   "observations": null, "support_provided": null,
   "follow_up_required": false, "follow_up_notes": null,
+  "staff_notes": null,
   "created_at": "...", "updated_at": "..."
 }
 ```
+
+**`recurring_series_id`** is `null` for an ordinary one-off visit, or the
+id of the [RecurringVisitSeries](recurring-visits.md) that generated it —
+otherwise a completely ordinary `HomeVisit`, assignable/completable
+through every endpoint on this page exactly like any other.
+
+**`staff_notes`** is admin/staff-only, both to write (only accepted on the
+staff full-edit `PATCH`, never the assignee-restricted one below) and to
+read: **it is omitted from the response entirely** (not sent as `null`)
+when the caller is the visit's own assigned volunteer, or is included as
+above for `admin`/`staff`. For recording something staff need on file
+that the assigned volunteer themselves shouldn't see — distinct from
+`observations`/`support_provided`, which the volunteer writes as part of
+their own completion report and can always see back.
 
 **`follow_up_required: true` auto-creates a [FollowUp](followups.md)**
 (defaulting `assigned_to_id` to this visit's own assignee, if any) — on a
@@ -62,7 +78,8 @@ user-listing endpoint in this app.
     "reason": "string, required, max 2000",
     "priority": "Low | Medium | High | Urgent, optional, default Medium",
     "assigned_to_id": "integer, optional — must be staff/admin or a Verified volunteer",
-    "scheduled_at": "ISO datetime, optional"
+    "scheduled_at": "ISO datetime, optional",
+    "staff_notes": "string, optional, max 2000"
   }
   ```
   `status` is not accepted here — it's always `Pending`, or `Assigned` if `assigned_to_id` was given.
@@ -84,7 +101,7 @@ user-listing endpoint in this app.
 
 Two different bodies depending on who's asking — same endpoint.
 
-- **`admin`/`staff`:** any subset of `elderly_member_id`, `assigned_to_id`, `priority`, `status`, `reason`, `scheduled_at`, `observations`, `support_provided`, `follow_up_required`, `follow_up_notes`.
+- **`admin`/`staff`:** any subset of `elderly_member_id`, `assigned_to_id`, `priority`, `status`, `reason`, `scheduled_at`, `observations`, `support_provided`, `follow_up_required`, `follow_up_notes`, `staff_notes`.
 - **The assigned volunteer/staff member on their own visit:** only `status`, `observations`, `support_provided`, `follow_up_required`, `follow_up_notes` — sending `elderly_member_id`, `assigned_to_id`, `priority`, `reason`, or `scheduled_at` is rejected as an unknown field (`400`), not silently dropped.
 - **Anyone else** (a volunteer on a visit not assigned to them): `403`.
 - Omitted fields are left unchanged in both cases — never reset to a default (in particular, omitting `status` never resets it to `Pending`).

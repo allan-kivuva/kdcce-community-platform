@@ -23,3 +23,15 @@ class StockMovementSchema(Schema):
     reason = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=1000))
     expiry_date = fields.Date(load_default=None, allow_none=True)
     donation_id = fields.Integer(load_default=None, allow_none=True)
+
+
+class DistributionCreateSchema(Schema):
+    """A distribution is always a stock-OUT to a named recipient — there
+    is no movement_type field here, unlike StockMovementSchema, since
+    it's never anything else."""
+
+    elderly_member_id = fields.Integer(required=True)
+    program_id = fields.Integer(load_default=None, allow_none=True)
+    quantity = fields.Decimal(required=True, as_string=False, places=2, validate=validate.Range(min=0.01))
+    reason = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=200))
+    notes = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=2000))

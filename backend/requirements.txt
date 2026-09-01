@@ -8,3 +8,8 @@ marshmallow==3.26.2
 python-dotenv==1.2.3
 gunicorn==22.0.0
 pytest==9.1.1
+# Optional at runtime — app/ai/service.py imports this lazily and only
+# when AI_ENABLED=true and ANTHROPIC_API_KEY is set; every AI feature
+# falls back to a deterministic template if it's missing/unconfigured,
+# so the core app never depends on it being installed.
+anthropic==1.2.0

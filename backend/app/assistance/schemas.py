@@ -17,11 +17,15 @@ class AssistanceRequestCreateSchema(Schema):
     assigned_to_id = fields.Integer(load_default=None, allow_none=True)
     home_visit_id = fields.Integer(load_default=None, allow_none=True)
     scheduled_at = fields.DateTime(load_default=None, allow_none=True)
+    staff_notes = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=2000))
 
 
 class AssistanceRequestStaffUpdateSchema(Schema):
     """Full edit — admin/staff only. No load_default on status/priority:
-    a meaningful non-null default only applies at creation."""
+    a meaningful non-null default only applies at creation.
+
+    staff_notes is ONLY here, never on AssistanceRequestAssigneeUpdateSchema
+    below — same reasoning as HomeVisitStaffUpdateSchema."""
 
     elderly_member_id = fields.Integer()
     assigned_to_id = fields.Integer(allow_none=True)
@@ -34,6 +38,7 @@ class AssistanceRequestStaffUpdateSchema(Schema):
     outcome_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
     follow_up_required = fields.Boolean()
     follow_up_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
+    staff_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
 
 
 class AssistanceRequestAssigneeUpdateSchema(Schema):

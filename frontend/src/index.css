@@ -138,3 +138,51 @@ img { display: block; }
 .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(var(--k-border-soft)); }
 .dark .text-slate-400 { color: rgb(var(--k-muted)); }
 .dark .text-slate-600 { color: rgb(148 163 184); }
+
+/*
+ * ============================================================
+ * Admin Command Center theme
+ * ============================================================
+ * Scoped entirely under .admin-shell (the wrapper every admin page
+ * renders inside, via components/admin/Shell.jsx) so none of this
+ * touches the public marketing site. Every admin page already shares
+ * the same handful of utility classes (btn-orange, text-kOrange,
+ * bg-kTint, card-k, input-k, .eyebrow) via that one Shell wrapper, so
+ * retinting them here — rather than editing 20+ manager pages — gives
+ * every admin screen the same premium blue/cyan palette in one place.
+ * card-k / input-k / kSurface / kBorder / kInk / kMuted are left
+ * exactly as-is: they're already theme-variable-driven and already
+ * read as a clean dark-navy panel system in .dark — no change needed.
+ * Chrome (header + top nav) is intentionally fixed-dark regardless of
+ * the light/dark toggle, same as the sidebar it replaces used to be;
+ * page content underneath keeps following the existing toggle.
+ */
+.admin-shell {
+  --k-admin-tint: 219 234 254;
+  --k-admin-cyan: 8 145 178;
+  --k-admin-blue: 37 99 235;
+  --k-admin-blue-dark: 29 78 216;
+}
+.dark .admin-shell {
+  --k-admin-tint: 23 37 64;
+  --k-admin-cyan: 45 212 191;
+}
+.admin-shell .btn-orange,
+.admin-shell .btn-green { background-color: rgb(var(--k-admin-blue)); }
+.admin-shell .btn-orange:hover:not(:disabled),
+.admin-shell .btn-green:hover:not(:disabled) { background-color: rgb(var(--k-admin-blue-dark)); }
+.admin-shell .text-kOrange { color: rgb(var(--k-admin-cyan)); }
+.admin-shell .text-kGreen { color: rgb(var(--k-admin-blue)); }
+.admin-shell .border-kOrange,
+.admin-shell .border-l-kOrange { border-color: rgb(var(--k-admin-cyan)); }
+.admin-shell .bg-kTint { background-color: rgb(var(--k-admin-tint)); }
+.admin-shell .bg-kGreen\/10 { background-color: rgb(var(--k-admin-blue) / 0.1); }
+
+.admin-chrome { background: #0a1220; }
+.admin-nav-link { position: relative; }
+.admin-nav-link.is-active { color: rgb(var(--k-admin-blue)); }
+.dark .admin-nav-link.is-active,
+.admin-chrome .admin-nav-link.is-active { color: #60a5fa; }
+.admin-nav-link.is-active::after { content: ''; position: absolute; left: 0.75rem; right: 0.75rem; bottom: -1px; height: 2px; border-radius: 2px; background: #3b82f6; }
+
+.badge-dot { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; border-radius: 999px; padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 1; }

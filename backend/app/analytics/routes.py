@@ -117,7 +117,7 @@ def dashboard():
         "critical_open": incidents_q.filter(Incident.status == "Open", Incident.severity == "Critical").count(),
         "follow_up_required": incidents_q.filter(Incident.follow_up_required.is_(True)).count(),
         "recent": [
-            {"id": i.id, "incident_type": i.incident_type, "severity": i.severity, "status": i.status, "occurred_at": i.occurred_at.isoformat(), "elderly_member_name": i.elderly_member.full_name}
+            {"id": i.id, "incident_type": i.incident_type, "severity": i.severity, "status": i.status, "occurred_at": i.occurred_at.isoformat(), "elderly_member_name": i.elderly_member.full_name if i.elderly_member else None}
             for i in recent_incidents
         ],
     }

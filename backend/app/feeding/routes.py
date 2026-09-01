@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..auth.decorators import roles_required
 from ..extensions import db
-from ..models import ElderlyMember, Meal, MealAttendance
+from ..models import ElderlyMember, Meal, MealAttendance, Program
 from ..utils import get_or_404, validation_error_response
 from .schemas import MealAttendanceSchema, MealSchema
 
@@ -21,6 +21,12 @@ def _attendee_count(meal_id):
     return MealAttendance.query.filter_by(meal_id=meal_id).count()
 
 
+def _program_or_400(program_id):
+    if db.session.get(Program, program_id) is None:
+        return jsonify(error="Validation failed", details={"program_id": ["Program not found"]}), 400
+    return None
+
+
 @bp.post("")
 @roles_required("admin", "staff")
 def create_meal():
@@ -29,6 +35,10 @@ def create_meal():
         data = meal_schema.load(payload)
     except ValidationError as err:
         return validation_error_response(err)
+    if data.get("program_id") is not None:
+        invalid = _program_or_400(data["program_id"])
+        if invalid:
+            return invalid
 
     data.setdefault("meal_date", date.today())
     meal = Meal(**data, planned_by_id=int(get_jwt_identity()))
@@ -72,6 +82,10 @@ def update_meal(meal_id):
         data = meal_schema.load(payload, partial=True)
     except ValidationError as err:
         return validation_error_response(err)
+    if data.get("program_id") is not None:
+        invalid = _program_or_400(data["program_id"])
+        if invalid:
+            return invalid
 
     for field, value in data.items():
         setattr(meal, field, value)

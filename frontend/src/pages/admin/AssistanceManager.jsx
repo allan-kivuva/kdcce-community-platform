@@ -5,6 +5,7 @@ import Modal from '../../components/admin/Modal'
 import AssignmentPhoto from '../../components/admin/AssignmentPhoto'
 import AssignmentConversation from '../../components/admin/AssignmentConversation'
 import AssignmentReview from '../../components/admin/AssignmentReview'
+import StatusBadge from '../../components/admin/StatusBadge'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
 import { apiFetch } from '../../lib/api'
@@ -12,7 +13,6 @@ import { apiFetch } from '../../lib/api'
 const TYPES = ['Hospital Accompaniment', 'Transportation', 'Food Assistance', 'Companionship', 'Home Support', 'Other']
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
 const STATUSES = ['Requested', 'Matching', 'Assigned', 'Accepted', 'Started', 'In Progress', 'Completed', 'Cancelled']
-const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
 
 function NewRequestModal({ assignees, onClose, onCreated, showToast }) {
   const [members, setMembers] = useState([])
@@ -69,6 +69,7 @@ function EditRequestModal({ req, assignees, onClose, onSaved, showToast }) {
       assigned_to_id: assignedVal ? Number(assignedVal) : null,
       description: f.get('description'),
       outcome_notes: f.get('outcome_notes') || null,
+      staff_notes: f.get('staff_notes') || null,
     }
     setSaving(true)
     try {
@@ -87,6 +88,7 @@ function EditRequestModal({ req, assignees, onClose, onSaved, showToast }) {
       <label className="text-sm font-semibold">Assign to<select name="assigned_to_id" defaultValue={req.assigned_to_id || ''} className="input-k mt-2"><option value="">Unassigned</option>{assignees.map(a => <option key={a.id} value={a.id}>{a.name} ({a.role})</option>)}</select></label>
       <label className="text-sm font-semibold">Description<textarea name="description" defaultValue={req.description} rows={2} className="input-k mt-2" required /></label>
       <label className="text-sm font-semibold">Outcome notes<textarea name="outcome_notes" defaultValue={req.outcome_notes} rows={2} className="input-k mt-2" /></label>
+      <label className="text-sm font-semibold">Staff-only notes<textarea name="staff_notes" defaultValue={req.staff_notes} rows={2} className="input-k mt-2" placeholder="Not visible to the assigned volunteer" /><span className="mt-1 block text-xs text-kMuted">Only admin/staff can see this — never shown to the assigned volunteer.</span></label>
       <button disabled={saving} className="btn-orange mt-2 disabled:opacity-60">{saving ? 'Saving…' : 'Save changes'}</button>
     </form>
 
@@ -124,7 +126,7 @@ export default function AssistanceManager({ showToast }) {
         <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="rounded-xl border border-kBorder bg-kSurface px-4 py-3 text-sm text-kInk"><option>All</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select>
       </div>
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-4">Member</th><th className="px-5 py-4">Type</th><th className="px-5 py-4">Priority</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Assigned to</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>
-        {filtered.map(r => <tr key={r.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{r.elderly_member_name}</div><div className="text-xs text-kMuted">{r.elderly_member_code}</div></td><td className="px-5 py-4 text-kMuted">{r.request_type}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${PRIORITY_STYLES[r.priority]}`}>{r.priority}</span></td><td className="px-5 py-4 text-kMuted">{r.status}</td><td className="px-5 py-4 text-kMuted">{r.assigned_to || 'Unassigned'}</td><td className="px-5 py-4"><button onClick={() => setEditReq(r)} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
+        {filtered.map(r => <tr key={r.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{r.elderly_member_name}</div><div className="text-xs text-kMuted">{r.elderly_member_code}</div></td><td className="px-5 py-4 text-kMuted">{r.request_type}</td><td className="px-5 py-4"><StatusBadge value={r.priority} /></td><td className="px-5 py-4"><StatusBadge value={r.status} /></td><td className="px-5 py-4 text-kMuted">{r.assigned_to || 'Unassigned'}</td><td className="px-5 py-4"><button onClick={() => setEditReq(r)} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
         {filtered.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-kMuted">No requests match your filters.</td></tr>}
       </tbody></table></div>
     </div>}

@@ -21,6 +21,21 @@ export default function GlobalSearch() {
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const boxRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // Ctrl+K / Cmd+K opens search from anywhere in the admin area, matching
+  // the shortcut hint shown in the search bar itself.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setOpen(true)
+        requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   useEffect(() => {
     if (q.trim().length < 2) { setResults(null); return }
@@ -48,9 +63,16 @@ export default function GlobalSearch() {
   return <div className="relative" ref={boxRef}>
     {open ? <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2">
       <Search size={15} className="text-white/60" />
-      <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search members, volunteers..." className="w-40 bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none sm:w-56" />
+      <input ref={inputRef} autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search volunteers, members, requests..." className="w-40 bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none sm:w-72" />
       <button onClick={close} className="text-white/60 hover:text-white"><X size={15} /></button>
-    </div> : <button onClick={() => setOpen(true)} className="grid h-9 w-9 place-items-center rounded-full text-white/70 hover:bg-white/10 hover:text-white" aria-label="Search"><Search size={18} /></button>}
+    </div> : <>
+      <button onClick={() => setOpen(true)} className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white/50 transition hover:bg-white/10 hover:text-white/80 md:flex md:w-64 lg:w-80">
+        <Search size={15} />
+        <span className="flex-1 text-left text-sm">Search volunteers, members, requests...</span>
+        <kbd className="rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-white/50">Ctrl K</kbd>
+      </button>
+      <button onClick={() => setOpen(true)} className="grid h-9 w-9 place-items-center rounded-full text-white/70 hover:bg-white/10 hover:text-white md:hidden" aria-label="Search"><Search size={18} /></button>
+    </>}
 
     {open && q.trim().length >= 2 && <div className="absolute right-0 z-30 mt-2 w-80 max-h-96 overflow-y-auto rounded-2xl border border-kBorderSoft bg-kSurface text-kInk shadow-soft">
       {loading ? <p className="p-4 text-center text-sm text-kMuted">Searching…</p> : !hasResults ? <p className="p-4 text-center text-sm text-kMuted">No matches for "{q}".</p> : CATEGORIES.map(([key, label, render]) => {

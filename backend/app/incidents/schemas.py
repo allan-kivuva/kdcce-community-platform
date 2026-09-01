@@ -12,6 +12,14 @@ class IncidentSchema(Schema):
     partial edit that happens to omit the field."""
 
     elderly_member_id = fields.Integer(required=True)
+    # No load_default, same reasoning as every other field in this shared
+    # create+PATCH schema (see class docstring) — on create, an omitted
+    # assigned_to_id should simply not be in `data` at all (the column is
+    # nullable with no explicit default, so the row is created unassigned
+    # either way); giving it load_default=None here would make it ALSO
+    # apply on a partial PATCH that doesn't mention this field at all,
+    # silently wiping out an existing assignment on an unrelated edit.
+    assigned_to_id = fields.Integer(allow_none=True)
     incident_type = fields.String(required=True, validate=validate.OneOf(INCIDENT_TYPES))
     severity = fields.String(allow_none=False, validate=validate.OneOf(INCIDENT_SEVERITIES))
     occurred_at = fields.DateTime(allow_none=False)

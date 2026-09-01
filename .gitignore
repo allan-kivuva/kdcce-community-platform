@@ -2,6 +2,9 @@
 *.swp
 .idea/
 .vscode/
+*.deb
+.venv/
+venv/
 
 # Uploaded assignment photos — private, never committed (dev DB is
 # local/throwaway; the files it references shouldn't live in git either).

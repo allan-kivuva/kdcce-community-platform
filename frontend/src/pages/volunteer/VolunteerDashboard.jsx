@@ -1,9 +1,94 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Home, HandHeart, CalendarClock, ShieldCheck, AlertTriangle } from 'lucide-react'
+import { Award, Clock, GraduationCap, Home, HandHeart, CalendarClock, ShieldCheck, AlertTriangle, Megaphone, MessageSquare, Sparkles, Target } from 'lucide-react'
 import VolunteerShell from '../../components/volunteer/VolunteerShell'
-import { LoadingState, ErrorState } from '../../components/admin/adminHelpers'
-import { getStoredUser } from '../../lib/api'
+import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
+import { apiFetch, getStoredUser } from '../../lib/api'
 import { useVolunteerData } from '../../lib/VolunteerDataContext'
+
+function fmtMinutes(minutes) {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function ImpactSection() {
+  const [impact, setImpact] = useState(null)
+  useEffect(() => {
+    Promise.all([apiFetch('/api/volunteers/me/hours'), apiFetch('/api/volunteers/me/achievements')])
+      .then(([h, a]) => setImpact({ hours: h.hours, achievementCount: a.achievements.earned.length, nextMilestone: a.achievements.upcoming[0] || null }))
+      .catch(() => {}) // impact is a nice-to-have on the dashboard, never blocks the rest of the page
+  }, [])
+  if (!impact) return null
+  return <div className="card-k mt-6 p-6">
+    <h2 className="font-display text-lg font-bold text-kGreen">My Impact</h2>
+    <div className="mt-4 grid gap-4 sm:grid-cols-4">
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><Clock size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{fmtMinutes(impact.hours.minutes_this_month)}</div><div className="text-xs text-kMuted">This month</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><Clock size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{fmtMinutes(impact.hours.minutes_lifetime)}</div><div className="text-xs text-kMuted">Lifetime hours</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><Award size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{impact.achievementCount}</div><div className="text-xs text-kMuted">Achievements</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><GraduationCap size={18} /></div><div className="min-w-0"><div className="truncate font-display text-sm font-bold text-kInk">{impact.nextMilestone ? impact.nextMilestone.name : 'All caught up'}</div><div className="text-xs text-kMuted">{impact.nextMilestone ? `${impact.nextMilestone.current_value}/${impact.nextMilestone.threshold_value}` : 'Next milestone'}</div></div></div>
+    </div>
+  </div>
+}
+
+function BriefingSection() {
+  const [facts, setFacts] = useState(null)
+  useEffect(() => {
+    apiFetch('/api/ai/volunteer/briefing').then(res => setFacts(res.facts)).catch(() => {}) // nice-to-have, never blocks the dashboard
+  }, [])
+  if (!facts) return null
+  const t = facts.today
+
+  return <div className="card-k mt-6 p-6">
+    <h2 className="flex items-center gap-2 font-display text-lg font-bold text-kGreen"><Sparkles size={18} /> Today at a glance</h2>
+    <div className="mt-4 grid gap-4 sm:grid-cols-3">
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><CalendarClock size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{t.assignment_count}</div><div className="text-xs text-kMuted">Assignments today</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><MessageSquare size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{t.unread_messages}</div><div className="text-xs text-kMuted">Unread messages</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-kTint text-kOrange"><GraduationCap size={18} /></div><div><div className="font-display text-xl font-bold text-kInk">{t.training_outstanding}</div><div className="text-xs text-kMuted">Training outstanding</div></div></div>
+    </div>
+    {facts.next_milestone && <div className="mt-4 flex items-center gap-2 rounded-xl bg-kOrange/10 px-4 py-3 text-sm font-semibold text-kOrange"><Target size={15} /> {facts.next_milestone.remaining} more toward "{facts.next_milestone.name}"</div>}
+  </div>
+}
+
+function CommunicationSection() {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    Promise.all([apiFetch('/api/messages/conversations'), apiFetch('/api/announcements')])
+      .then(([c, a]) => setData({
+        conversations: [...c.conversations].sort((x, y) => new Date(y.updated_at) - new Date(x.updated_at)).slice(0, 3),
+        unreadCount: c.conversations.reduce((s, x) => s + x.unread_count, 0),
+        announcements: a.announcements.slice(0, 2),
+      }))
+      .catch(() => {}) // a nice-to-have preview — a failed fetch just leaves the section hidden
+  }, [])
+  if (!data) return null
+  if (data.conversations.length === 0 && data.announcements.length === 0) return null
+
+  return <div className="card-k mt-6 p-6">
+    <div className="flex items-center justify-between">
+      <h2 className="flex items-center gap-2 font-display text-lg font-bold text-kGreen"><MessageSquare size={18} /> Messages {data.unreadCount > 0 && <span className="rounded-full bg-kOrange px-2 py-0.5 text-xs font-bold text-white">{data.unreadCount} unread</span>}</h2>
+      <Link to="/volunteer/messages" className="text-sm font-semibold text-kOrange">View all messages</Link>
+    </div>
+    {data.conversations.length === 0 ? <p className="mt-3 text-sm text-kMuted">No conversations yet.</p> : <div className="mt-4 grid gap-2">
+      {data.conversations.map(c => <Link key={c.id} to="/volunteer/messages" className="flex items-center justify-between gap-3 rounded-xl border border-kBorderSoft p-3 hover:border-kOrange">
+        <div className="min-w-0"><div className="truncate text-sm font-semibold text-kInk">{c.other_user.name}</div><div className="truncate text-xs text-kMuted">{c.last_message?.body}</div></div>
+        {c.unread_count > 0 && <span className="shrink-0 h-2 w-2 rounded-full bg-kOrange" />}
+      </Link>)}
+    </div>}
+
+    {data.announcements.length > 0 && <div className="mt-5 border-t border-kBorderSoft pt-4">
+      <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-kMuted"><Megaphone size={13} /> Announcements</h3>
+      <div className="mt-2 grid gap-2">
+        {data.announcements.map(a => <div key={a.id} className={`rounded-xl p-3 text-sm ${a.priority === 'Urgent' ? 'bg-red-500/10' : 'bg-kCream'}`}>
+          <div className="font-semibold text-kInk">{a.title}</div>
+          <div className="mt-0.5 truncate text-xs text-kMuted">{a.body}</div>
+        </div>)}
+      </div>
+    </div>}
+  </div>
+}
 
 function isToday(iso) {
   if (!iso) return false
@@ -59,6 +144,10 @@ export default function VolunteerDashboard({ profile }) {
       <StatCard value={completedThisMonth} label="Completed This Month" />
       <StatCard value={elderly.length} label="Elderly Members" />
     </div>
+
+    <ImpactSection />
+    <BriefingSection />
+    <CommunicationSection />
 
     <div className="card-k mt-6 p-6">
       <h2 className="font-display text-lg font-bold text-kGreen">Today's Work</h2>

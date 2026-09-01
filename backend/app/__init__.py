@@ -31,6 +31,10 @@ def create_app(config_object=Config):
     from .medication.routes import bp as medication_bp
     from .volunteers.routes import bp as volunteers_bp
     from .homevisits.routes import bp as homevisits_bp
+    from .recurring_visits.routes import bp as recurring_visits_bp
+    from .training.routes import bp as training_bp
+    from .documents.routes import bp as documents_bp
+    from .achievements.routes import bp as achievements_bp
     from .feeding.routes import bp as feeding_bp
     from .inventory.routes import bp as inventory_bp
     from .activities.routes import bp as activities_bp
@@ -43,6 +47,26 @@ def create_app(config_object=Config):
     from .followups.routes import bp as followups_bp
     from .calendar.routes import bp as calendar_bp
     from .search.routes import bp as search_bp
+    from .messaging.routes import bp as messaging_bp
+    from .announcements.routes import bp as announcements_bp
+    from .broadcasts.routes import bp as broadcasts_bp
+    from .programs.routes import bp as programs_bp
+    from .resources.routes import bp as resources_bp
+    from .donors.routes import bp as donors_bp
+    from .campaigns.routes import bp as campaigns_bp, admin_bp as admin_campaigns_bp
+    from .expenses.routes import bp as expenses_bp
+    from .budgets.routes import bp as budgets_bp
+    from .audit.routes import bp as audit_bp
+    from .users.routes import bp as users_bp
+    from .sessions.routes import bp as sessions_bp
+    from .login_history.routes import bp as login_history_bp
+    from .system.routes import bp as system_bp
+    from .consent.routes import bp as consent_bp
+    from .family.routes import bp as family_bp, admin_bp as admin_family_access_bp
+    from .matching.routes import bp as matching_bp
+    from .operations.routes import bp as operations_bp
+    from .imports.routes import bp as imports_bp
+    from .ai.routes import admin_bp as ai_admin_bp, volunteer_bp as ai_volunteer_bp, content_bp as ai_content_bp, insights_bp as ai_insights_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(donations_bp)
@@ -57,6 +81,10 @@ def create_app(config_object=Config):
     app.register_blueprint(medication_bp)
     app.register_blueprint(volunteers_bp)
     app.register_blueprint(homevisits_bp)
+    app.register_blueprint(recurring_visits_bp)
+    app.register_blueprint(training_bp)
+    app.register_blueprint(documents_bp)
+    app.register_blueprint(achievements_bp)
     app.register_blueprint(feeding_bp)
     app.register_blueprint(inventory_bp)
     app.register_blueprint(activities_bp)
@@ -70,10 +98,37 @@ def create_app(config_object=Config):
     app.register_blueprint(followups_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(messaging_bp)
+    app.register_blueprint(announcements_bp)
+    app.register_blueprint(broadcasts_bp)
+    app.register_blueprint(programs_bp)
+    app.register_blueprint(resources_bp)
+    app.register_blueprint(donors_bp)
+    app.register_blueprint(campaigns_bp)
+    app.register_blueprint(admin_campaigns_bp)
+    app.register_blueprint(expenses_bp)
+    app.register_blueprint(budgets_bp)
+    app.register_blueprint(audit_bp)
+    app.register_blueprint(users_bp)
+    app.register_blueprint(sessions_bp)
+    app.register_blueprint(login_history_bp)
+    app.register_blueprint(system_bp)
+    app.register_blueprint(consent_bp)
+    app.register_blueprint(family_bp)
+    app.register_blueprint(admin_family_access_bp)
+    app.register_blueprint(matching_bp)
+    app.register_blueprint(operations_bp)
+    app.register_blueprint(imports_bp)
+    app.register_blueprint(ai_admin_bp)
+    app.register_blueprint(ai_volunteer_bp)
+    app.register_blueprint(ai_content_bp)
+    app.register_blueprint(ai_insights_bp)
 
-    from .cli import seed_admin, seed_demo
+    from .cli import generate_operational_report, generate_recurring_visits, seed_admin, seed_demo
     app.cli.add_command(seed_admin)
     app.cli.add_command(seed_demo)
+    app.cli.add_command(generate_recurring_visits)
+    app.cli.add_command(generate_operational_report)
 
     @app.get("/api/health")
     def health():
