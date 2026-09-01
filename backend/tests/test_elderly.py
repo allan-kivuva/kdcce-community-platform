@@ -134,6 +134,28 @@ def test_elderly_update_status(client, make_staff_user, auth_header):
     assert resp.get_json()["member"]["status"] == "Inactive"
 
 
+def test_elderly_member_create_update_delete_is_audited(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    member = client.post("/api/elderly", json=VALID_MEMBER, headers=auth_header(token)).get_json()["member"]
+    client.patch(f"/api/elderly/{member['id']}", json={"status": "Inactive"}, headers=auth_header(token))
+    client.delete(f"/api/elderly/{member['id']}", headers=auth_header(token))
+
+    logs_resp = client.get(
+        f"/api/audit-logs?resource_type=elderly_member&resource_id={member['id']}", headers=auth_header(token)
+    )
+    logs = logs_resp.get_json()["audit_logs"]
+    assert len(logs) == 3
+    actions = {l["action"] for l in logs}
+    assert actions == {"create", "update", "delete"}
+    for log in logs:
+        for snapshot in (log["before"], log["after"]):
+            if snapshot is None:
+                continue
+            for key in snapshot:
+                assert "password" not in key.lower()
+                assert "token" not in key.lower()
+
+
 def test_staff_cannot_delete_elderly_member(client, make_staff_user, auth_header):
     _, token = make_staff_user("staff")
     member = client.post("/api/elderly", json=VALID_MEMBER, headers=auth_header(token)).get_json()["member"]

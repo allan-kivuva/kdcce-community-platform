@@ -2,11 +2,15 @@ import secrets
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity
 from marshmallow import ValidationError
 
+from ..audit.service import log_action
 from ..auth.decorators import roles_required
+from ..campaigns.service import find_campaign_by_exact_name
+from ..donors.service import resolve_or_create_donor
 from ..extensions import db, limiter
-from ..models import Donation
+from ..models import Campaign, Donation, Donor
 from ..utils import get_or_404, validation_error_response, csv_response
 from .schemas import AdminDonationCreateSchema, DonationCreateSchema, DonationUpdateSchema
 
@@ -32,6 +36,19 @@ def _assign_receipt_and_commit(donation):
     year = datetime.now(timezone.utc).year
     donation.receipt_id = f"KDCCE-{year}-{str(donation.id).zfill(6)}"
     donation.txn_id = _make_txn_id()
+
+    # Phase 6: link this new donation to a Donor/Campaign wherever that's
+    # unambiguous, without touching the free-text donor_name/donor_email/
+    # campaign fields at all. Both are deterministic single-candidate
+    # lookups (the donor's own email just typed on this submission; an
+    # exact-name Campaign match) — not the ambiguous multi-candidate
+    # problem the historical backfill guards against. See donors/service.py
+    # and campaigns/service.py for the exact rules.
+    donor = resolve_or_create_donor(donation.donor_name, donation.donor_email)
+    donation.donor_id = donor.id if donor else None
+    matched_campaign = find_campaign_by_exact_name(donation.campaign)
+    donation.campaign_id = matched_campaign.id if matched_campaign else None
+
     db.session.commit()
 
 
@@ -151,10 +168,25 @@ def update_donation(donation_id):
     except ValidationError as err:
         return validation_error_response(err)
 
+    if "donor_id" in data and data["donor_id"] is not None and db.session.get(Donor, data["donor_id"]) is None:
+        return jsonify(error="Validation failed", details={"donor_id": ["Donor not found"]}), 400
+    if "campaign_id" in data and data["campaign_id"] is not None and db.session.get(Campaign, data["campaign_id"]) is None:
+        return jsonify(error="Validation failed", details={"campaign_id": ["Campaign not found"]}), 400
+
+    previous_status = donation.status
     for field, value in data.items():
         if field == "donor_email" and value is not None:
             value = value.lower()
         setattr(donation, field, value)
+    db.session.flush()
 
+    # A donation-status change is exactly the kind of "manual financial
+    # correction" this phase's audit requirements call out — logged
+    # distinctly from an ordinary field edit.
+    if "status" in data and data["status"] != previous_status:
+        log_action(
+            int(get_jwt_identity()), "status_change", "donation", donation.id,
+            before={"status": previous_status}, after={"status": donation.status},
+        )
     db.session.commit()
     return jsonify(donation=donation.to_dict()), 200

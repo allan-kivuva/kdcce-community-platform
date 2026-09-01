@@ -149,3 +149,25 @@ def test_staff_cannot_delete_meal(client, make_staff_user, auth_header):
     meal = client.post("/api/meals", json={"meal_type": "Lunch"}, headers=auth_header(token)).get_json()["meal"]
     resp = client.delete(f"/api/meals/{meal['id']}", headers=auth_header(token))
     assert resp.status_code == 403
+
+
+def test_meal_can_be_linked_to_a_program_on_create_and_update(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    program = client.post("/api/programs", json={"name": "Feeding Program"}, headers=auth_header(token)).get_json()["program"]
+
+    resp = client.post("/api/meals", json={"meal_type": "Lunch", "program_id": program["id"]}, headers=auth_header(token))
+    assert resp.status_code == 201
+    meal = resp.get_json()["meal"]
+    assert meal["program_id"] == program["id"]
+    assert meal["program_name"] == "Feeding Program"
+
+    other_program = client.post("/api/programs", json={"name": "Other Program"}, headers=auth_header(token)).get_json()["program"]
+    resp2 = client.patch(f"/api/meals/{meal['id']}", json={"program_id": other_program["id"]}, headers=auth_header(token))
+    assert resp2.status_code == 200
+    assert resp2.get_json()["meal"]["program_name"] == "Other Program"
+
+
+def test_meal_rejects_a_nonexistent_program(client, make_staff_user, auth_header):
+    _, token = make_staff_user("admin")
+    resp = client.post("/api/meals", json={"meal_type": "Lunch", "program_id": 999999}, headers=auth_header(token))
+    assert resp.status_code == 400

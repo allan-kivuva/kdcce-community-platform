@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, ClipboardCheck, Heart, Pill, Utensils, Home, HandHeart, ShieldAlert, AlertTriangle, Camera } from 'lucide-react'
+import { ArrowLeft, ClipboardCheck, Heart, Pill, Utensils, Home, HandHeart, ShieldAlert, AlertTriangle, Camera, Sparkles } from 'lucide-react'
 import Shell from '../../components/admin/Shell'
+import StatusBadge from '../../components/admin/StatusBadge'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { apiFetch } from '../../lib/api'
 
@@ -12,7 +13,6 @@ const TABS = [
 ]
 
 const TYPE_ICONS = { attendance: ClipboardCheck, health: Heart, medication: Pill, meal: Utensils, home_visit: Home, assistance: HandHeart, incident: ShieldAlert }
-const STATUS_STYLES = { Active: 'bg-kGreen/10 text-kGreen', Inactive: 'bg-kBorderSoft text-kMuted', Deceased: 'bg-kBorderSoft text-kMuted', Transferred: 'bg-kTint text-kOrange' }
 
 function fmtDay(iso) { return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) }
 function fmtTime(iso) { return new Date(iso).toLocaleTimeString([], { timeStyle: 'short' }) }
@@ -35,6 +35,38 @@ function TimelineEntry({ event }) {
         {d.has_photo && <div className="flex items-center gap-1 text-kOrange"><Camera size={13} /> Photo attached</div>}
       </div>
     </div>
+  </div>
+}
+
+function TimelineSummaryBox({ memberId }) {
+  const [days, setDays] = useState(30)
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function generate() {
+    setLoading(true)
+    setError('')
+    setSummary(null)
+    try {
+      const res = await apiFetch(`/api/ai/elderly/${memberId}/timeline-summary`, { method: 'POST', body: { days } })
+      setSummary(res.summary)
+    } catch (err) { setError(errorMessage(err)) }
+    finally { setLoading(false) }
+  }
+
+  return <div className="mb-4 rounded-xl border border-kBorderSoft bg-kCream p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm font-bold text-kGreen"><Sparkles size={15} /> AI-generated summary</div>
+      <div className="flex items-center gap-2">
+        <select value={days} onChange={e => setDays(Number(e.target.value))} className="input-k w-32 py-1.5 text-xs">
+          <option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option>
+        </select>
+        <button onClick={generate} disabled={loading} className="btn-orange px-3 py-1.5 text-xs disabled:opacity-60">{loading ? 'Summarizing…' : 'Summarize'}</button>
+      </div>
+    </div>
+    {error && <p className="mt-2 text-xs font-semibold text-red-500">{error}</p>}
+    {summary && <p className="mt-3 text-sm leading-6 text-kInk">{summary}</p>}
   </div>
 }
 
@@ -79,7 +111,7 @@ export default function ElderlyProfile() {
         <p className="text-sm text-kMuted">{member.member_id}{member.opa_name ? ` · ${member.opa_name}` : ''}</p>
       </div>
       <div className="flex items-center gap-3">
-        <span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_STYLES[member.status]}`}>{member.status}</span>
+        <StatusBadge value={member.status} />
         {openFollowups > 0 && <span className="flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700"><AlertTriangle size={13} /> {openFollowups} open follow-up{openFollowups > 1 ? 's' : ''}</span>}
       </div>
     </div>
@@ -123,6 +155,7 @@ export default function ElderlyProfile() {
       </div>)}
       {followups.length === 0 && <p className="py-4 text-sm text-kMuted">No follow-ups for this member.</p>}
     </div> : tab !== 'overview' && <div className="card-k mt-6 p-6">
+      {tab === 'timeline' && <TimelineSummaryBox memberId={id} />}
       {filtered.map(e => <TimelineEntry key={`${e.type}-${e.timestamp}`} event={e} />)}
       {filtered.length === 0 && <p className="py-4 text-sm text-kMuted">No records in this category yet.</p>}
     </div>}

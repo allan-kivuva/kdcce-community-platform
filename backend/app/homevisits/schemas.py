@@ -9,12 +9,18 @@ class HomeVisitCreateSchema(Schema):
     priority = fields.String(allow_none=False, validate=validate.OneOf(HOME_VISIT_PRIORITIES))
     assigned_to_id = fields.Integer(load_default=None, allow_none=True)
     scheduled_at = fields.DateTime(load_default=None, allow_none=True)
+    staff_notes = fields.String(load_default=None, allow_none=True, validate=validate.Length(max=2000))
 
 
 class HomeVisitStaffUpdateSchema(Schema):
     """Full edit — admin/staff only. No load_default on status/
     follow_up_required/priority: a meaningful non-null default only makes
-    sense at creation, not on every partial edit that omits the field."""
+    sense at creation, not on every partial edit that omits the field.
+
+    staff_notes is ONLY here, never on HomeVisitAssigneeUpdateSchema below
+    — that's what keeps it out of reach of the assigned volunteer's own
+    PATCH path (see the route's role branch, and HomeVisit.to_dict's
+    include_private)."""
 
     elderly_member_id = fields.Integer()
     assigned_to_id = fields.Integer(allow_none=True)
@@ -26,6 +32,7 @@ class HomeVisitStaffUpdateSchema(Schema):
     support_provided = fields.String(allow_none=True, validate=validate.Length(max=2000))
     follow_up_required = fields.Boolean()
     follow_up_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
+    staff_notes = fields.String(allow_none=True, validate=validate.Length(max=2000))
 
 
 class HomeVisitAssigneeUpdateSchema(Schema):

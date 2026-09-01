@@ -8,6 +8,7 @@ const nav = [
   ['Home', '/'],
   ['About Us', '/about'],
   ['Programs', '/programs'],
+  ['Campaigns', '/campaigns'],
   ['Impact', '/about#impact'],
   ['Gallery', '/gallery'],
   ['Get Involved', '/sponsor'],

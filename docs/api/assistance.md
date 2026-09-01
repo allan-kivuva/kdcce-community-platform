@@ -34,9 +34,13 @@ Request object:
   "description": "Would like a weekly visitor",
   "scheduled_at": null, "completed_at": null, "outcome_notes": null,
   "follow_up_required": false, "follow_up_notes": null,
+  "staff_notes": null,
   "created_at": "...", "updated_at": "..."
 }
 ```
+`staff_notes` (admin/staff-only, both to write and to read — omitted from
+the response entirely, not sent as `null`, for the assigned volunteer's
+own view) works exactly as documented for [home visits](home-visits.md).
 `request_type`: `Hospital Accompaniment | Transportation | Food Assistance
 | Companionship | Home Support | Other`. `priority`: `Low | Medium | High
 | Urgent`. `status`: `Requested | Matching | Assigned | Accepted | In

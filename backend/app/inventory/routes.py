@@ -3,17 +3,19 @@ from flask_jwt_extended import get_jwt_identity
 from marshmallow import ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from ..audit.service import log_action
 from ..auth.decorators import roles_required
 from ..extensions import db
-from ..models import Donation, InventoryItem, StockMovement, User
-from ..notifications.service import notify
+from ..models import Distribution, Donation, ElderlyMember, InventoryItem, Program, StockMovement
 from ..utils import get_or_404, validation_error_response
-from .schemas import InventoryItemSchema, StockMovementSchema
+from . import service as inventory_service
+from .schemas import DistributionCreateSchema, InventoryItemSchema, StockMovementSchema
 
 bp = Blueprint("inventory", __name__, url_prefix="/api/inventory")
 
 item_schema = InventoryItemSchema()
 movement_schema = StockMovementSchema()
+distribution_schema = DistributionCreateSchema()
 
 
 @bp.post("")
@@ -107,34 +109,14 @@ def create_movement(item_id):
     if data.get("donation_id") is not None and db.session.get(Donation, data["donation_id"]) is None:
         return jsonify(error="Validation failed", details={"donation_id": ["Donation not found"]}), 400
 
-    if data["movement_type"] == "Out" and data["quantity"] > item.current_stock:
-        return jsonify(error=f"Insufficient stock: {item.current_stock} {item.unit} available, {data['quantity']} requested"), 400
+    try:
+        movement = inventory_service.apply_movement(
+            item, data["movement_type"], data["quantity"], int(get_jwt_identity()),
+            reason=data.get("reason"), expiry_date=data.get("expiry_date"), donation_id=data.get("donation_id"),
+        )
+    except inventory_service.InsufficientStockError as err:
+        return jsonify(error=f"Insufficient stock: {err.available} {item.unit} available, {err.requested} requested"), 400
 
-    was_low_stock = item.current_stock <= item.minimum_stock
-
-    movement = StockMovement(
-        item_id=item.id,
-        movement_type=data["movement_type"],
-        quantity=data["quantity"],
-        reason=data.get("reason"),
-        expiry_date=data.get("expiry_date") if data["movement_type"] == "In" else None,
-        donation_id=data.get("donation_id"),
-        recorded_by_id=int(get_jwt_identity()),
-    )
-    item.current_stock = item.current_stock + data["quantity"] if data["movement_type"] == "In" else item.current_stock - data["quantity"]
-
-    # Only alert on the transition into low stock, not on every subsequent
-    # movement while it stays low — otherwise every further stock-out
-    # would spam a fresh alert to every admin/staff for the same item.
-    if not was_low_stock and item.current_stock <= item.minimum_stock:
-        for staff_member in User.query.filter(User.role.in_(("admin", "staff"))).all():
-            notify(
-                staff_member.id, "Low Inventory Alert", f"Low stock: {item.name}",
-                f"{item.name} is at {item.current_stock} {item.unit}, at or below the minimum of {item.minimum_stock} {item.unit}.",
-                related_resource_type="inventory_item", related_resource_id=item.id,
-            )
-
-    db.session.add(movement)
     try:
         # Movement row + balance update committed together — if either
         # fails, both roll back, so current_stock can never end up out of
@@ -156,3 +138,71 @@ def list_movements(item_id):
     get_or_404(InventoryItem, item_id)
     movements = StockMovement.query.filter_by(item_id=item_id).order_by(StockMovement.created_at.desc()).all()
     return jsonify(movements=[m.to_dict() for m in movements]), 200
+
+
+# ---------- Distributions (a stock-out to a named recipient) ----------
+
+@bp.post("/<int:item_id>/distributions")
+@roles_required("admin", "staff")
+def create_distribution(item_id):
+    """Creates the underlying StockMovement("Out") via the same
+    apply_movement() the plain movement endpoint uses, plus a
+    Distribution row linking it to a specific elderly member (and,
+    optionally, a program) — see the Distribution model docstring for
+    why this is additive on top of the ledger rather than a new one."""
+    item = get_or_404(InventoryItem, item_id)
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = distribution_schema.load(payload)
+    except ValidationError as err:
+        return validation_error_response(err)
+
+    get_or_404(ElderlyMember, data["elderly_member_id"])
+    if data.get("program_id") is not None and db.session.get(Program, data["program_id"]) is None:
+        return jsonify(error="Validation failed", details={"program_id": ["Program not found"]}), 400
+
+    try:
+        movement = inventory_service.apply_movement(
+            item, "Out", data["quantity"], int(get_jwt_identity()), reason=data.get("reason"),
+        )
+    except inventory_service.InsufficientStockError as err:
+        return jsonify(error=f"Insufficient stock: {err.available} {item.unit} available, {err.requested} requested"), 400
+
+    db.session.flush()  # assigns movement.id
+    distribution = Distribution(
+        item_id=item.id, elderly_member_id=data["elderly_member_id"], program_id=data.get("program_id"),
+        movement_id=movement.id, quantity=data["quantity"], recorded_by_id=int(get_jwt_identity()),
+        reason=data.get("reason"), notes=data.get("notes"),
+    )
+    db.session.add(distribution)
+    db.session.flush()
+    log_action(
+        int(get_jwt_identity()), "create", "distribution", distribution.id,
+        after={"item_id": item.id, "elderly_member_id": distribution.elderly_member_id, "quantity": float(distribution.quantity)},
+    )
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(error="This distribution would take stock below zero."), 400
+
+    return jsonify(distribution=distribution.to_dict(), item=item.to_dict()), 201
+
+
+@bp.get("/distributions")
+@roles_required("admin", "staff")
+def list_distributions():
+    query = Distribution.query
+    item_id = request.args.get("item_id", type=int)
+    if item_id is not None:
+        query = query.filter_by(item_id=item_id)
+    elderly_member_id = request.args.get("elderly_member_id", type=int)
+    if elderly_member_id is not None:
+        query = query.filter_by(elderly_member_id=elderly_member_id)
+    program_id = request.args.get("program_id", type=int)
+    if program_id is not None:
+        query = query.filter_by(program_id=program_id)
+
+    rows = query.order_by(Distribution.distributed_at.desc()).limit(200).all()
+    return jsonify(distributions=[d.to_dict() for d in rows]), 200

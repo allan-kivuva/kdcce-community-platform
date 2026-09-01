@@ -97,6 +97,29 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        # SQLite batch-mode ALTER TABLE (used throughout this project's
+        # migrations to add/drop columns and constraints) recreates the
+        # table: create temp, copy rows, drop the original, rename the
+        # temp. This app runs with PRAGMA foreign_keys=ON everywhere
+        # (see extensions.py) — including on this very connection, via
+        # the same engine-level "connect" event — so dropping a table
+        # that other tables hold live foreign-key rows into (e.g.
+        # activities, referenced by activity_participants) fails with
+        # "FOREIGN KEY constraint failed" partway through the batch op.
+        # Toggling the pragma off for the duration of the whole
+        # migration run, before any statement executes, is the reliable
+        # fix — doing it per-migration-script was empirically flaky
+        # (SQLite silently no-ops a PRAGMA change once an implicit
+        # transaction from an earlier DML statement is already open).
+        # Each toggle commits immediately (rather than riding along with
+        # Alembic's own transaction below) so it can never leave a
+        # dangling uncommitted transaction on this connection — that was
+        # empirically observed to make the final alembic_version write
+        # silently vanish on connection close.
+        if connectable.dialect.name == "sqlite":
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
@@ -105,6 +128,10 @@ def run_migrations_online():
 
         with context.begin_transaction():
             context.run_migrations()
+
+        if connectable.dialect.name == "sqlite":
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
 
 
 if context.is_offline_mode():

@@ -56,6 +56,7 @@ unauthenticated write endpoint (`register`, `login`, `POST /api/donations`,
 | Medication | [medication.md](medication.md) | Implemented |
 | Volunteers | [volunteers.md](volunteers.md) | Implemented |
 | Home visits | [home-visits.md](home-visits.md) | Implemented |
+| Recurring home visits | [recurring-visits.md](recurring-visits.md) | Implemented |
 | Feeding | [feeding.md](feeding.md) | Implemented |
 | Inventory | [inventory.md](inventory.md) | Implemented |
 | Activities | [activities.md](activities.md) | Implemented |

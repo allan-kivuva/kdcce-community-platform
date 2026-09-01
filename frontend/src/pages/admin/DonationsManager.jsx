@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Search, Plus, Pencil, Download } from 'lucide-react'
 import Shell from '../../components/admin/Shell'
 import Modal from '../../components/admin/Modal'
+import StatusBadge from '../../components/admin/StatusBadge'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { useApiResource } from '../../lib/useApiResource'
 import { downloadFile } from '../../lib/api'
@@ -120,7 +121,7 @@ export default function DonationsManager({ showToast }) {
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-xl border border-kBorder bg-kSurface px-4 py-3 text-sm text-kInk"><option>All</option><option>Paid</option><option>Pending</option><option>Received</option></select>
       </div>
       <div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-4">Donor</th><th className="px-5 py-4">Type</th><th className="px-5 py-4">Value</th><th className="px-5 py-4">Frequency</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>
-        {filtered.map(d => <tr key={d.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{d.donor_name}</div><div className="text-xs text-kMuted">{d.donor_email || 'No email given'}</div></td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${TYPE_STYLES[d.donation_type]}`}>{d.donation_type}</span></td><td className="px-5 py-4 text-kMuted">{summaryOf(d)}</td><td className="px-5 py-4 text-kMuted">{frequencyLabel(d.frequency)}</td><td className="px-5 py-4 text-kMuted">{d.status}</td><td className="px-5 py-4"><button onClick={() => setModal({ data: d })} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
+        {filtered.map(d => <tr key={d.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{d.donor_name}</div><div className="text-xs text-kMuted">{d.donor_email || 'No email given'}</div></td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${TYPE_STYLES[d.donation_type]}`}>{d.donation_type}</span></td><td className="px-5 py-4 text-kMuted">{summaryOf(d)}</td><td className="px-5 py-4 text-kMuted">{frequencyLabel(d.frequency)}</td><td className="px-5 py-4"><StatusBadge value={d.status} /></td><td className="px-5 py-4"><button onClick={() => setModal({ data: d })} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
         {filtered.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-kMuted">No donations match your search.</td></tr>}
       </tbody></table></div>
     </div>}

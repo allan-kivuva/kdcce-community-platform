@@ -60,6 +60,35 @@ application status and their approval/rejection notification.
 - **Request:** any subset of `{ "phone", "skills", "availability", "areas_of_interest", "experience", "motivation", "bio" }` (all optional strings) — **`status` and `rejection_reason` are not accepted here**, sending either is rejected as an unknown field (`400`), which also means a payload mixing a legitimate field with `status` 400s as a whole rather than silently applying the legitimate part. Omitted fields are left unchanged, never reset.
 - **Response `200`:** `{ "volunteer": { ... } }`. Errors: `400`, `401`, `404`.
 
+## Structured availability (self-service)
+
+Alongside the free-text `availability` field on the profile itself, a
+volunteer can also record structured, queryable availability — recurring
+weekly windows and specific unavailable date ranges. Both are purely
+informational for admin/staff to consult when assigning work: nothing
+validates or blocks assignment creation against them (that's a future
+matching feature, not this one). The free-text field is unchanged and
+independent — a volunteer may use either, both, or neither.
+
+### GET /api/volunteers/me/availability
+- **Auth:** any valid token with a profile. Response `200`: `{ "availability": [ { "id": 1, "day_of_week": "Monday", "start_time": "09:00", "end_time": "12:00" }, ... ] }`.
+
+### POST /api/volunteers/me/availability
+- **Request:** `{ "day_of_week": "Monday" (one of Monday..Sunday), "start_time": "09:00", "end_time": "12:00" }` — `end_time` must be after `start_time` (`400` otherwise).
+- **Response `201`:** `{ "availability": { ... } }`.
+
+### DELETE /api/volunteers/me/availability/{id}
+- Removes one of your own windows. `404` (not `403`) if the id isn't yours — same anti-enumeration shape used elsewhere in this app.
+
+### GET /api/volunteers/me/unavailability
+- Same shape, for date-range exceptions: `{ "unavailability": [ { "id": 1, "start_date": "2026-12-20", "end_date": "2027-01-05", "reason": "Holiday travel" }, ... ] }`. `reason` is optional.
+
+### POST /api/volunteers/me/unavailability
+- **Request:** `{ "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "reason": "optional string, max 200" }` — `end_date` must not be before `start_date`.
+
+### DELETE /api/volunteers/me/unavailability/{id}
+- Same ownership/404 rule as the availability delete above.
+
 ## Staff management
 
 ### GET /api/volunteers
@@ -69,6 +98,9 @@ application status and their approval/rejection notification.
 
 ### GET /api/volunteers/{id}
 - **Auth:** `admin` or `staff`. Response `200`: `{ "volunteer": { ... } }`. Errors: `404`.
+
+### GET /api/volunteers/{id}/availability
+- **Auth:** `admin` or `staff` — read-only, for consulting a volunteer's offered windows when deciding who to assign work to. There is no admin/staff write path here on purpose (a volunteer's own statement of when they're free isn't something staff edit for them). Response `200`: `{ "availability": [ ... ], "unavailability": [ ... ] }` (same shapes as the self-service endpoints above). Errors: `404`.
 
 ### PATCH /api/volunteers/{id}
 - **Auth:** `admin` or `staff`.

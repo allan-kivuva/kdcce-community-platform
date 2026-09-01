@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, Plus, Pencil, AlertTriangle } from 'lucide-react'
 import Shell from '../../components/admin/Shell'
 import Modal from '../../components/admin/Modal'
+import StatusBadge from '../../components/admin/StatusBadge'
 import { LoadingState, ErrorState, errorMessage } from '../../components/admin/adminHelpers'
 import { apiFetch } from '../../lib/api'
 
 const STATUSES = ['Pending', 'In Progress', 'Completed']
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent']
-const PRIORITY_STYLES = { Low: 'bg-kBorderSoft text-kMuted', Medium: 'bg-kTint text-kOrange', High: 'bg-orange-100 text-orange-700', Urgent: 'bg-red-100 text-red-700' }
-const STATUS_STYLES = { Pending: 'bg-kTint text-kOrange', 'In Progress': 'bg-kGreen/10 text-kGreen', Completed: 'bg-kBorderSoft text-kMuted' }
 const SOURCE_LABELS = { health_record: 'Health', home_visit: 'Home Visit', assistance_request: 'Assistance', incident: 'Incident', manual: 'Manual' }
 
 function NewFollowUpModal({ assignees, onClose, onCreated, showToast }) {
@@ -139,7 +138,7 @@ export default function FollowUpsManager({ showToast }) {
         <div className="ml-auto flex items-center text-sm text-kMuted">{pendingCount} pending</div>
       </div>
       <div className="overflow-x-auto"><table className="w-full min-w-[950px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-4">Member</th><th className="px-5 py-4">Source</th><th className="px-5 py-4">Reason</th><th className="px-5 py-4">Priority</th><th className="px-5 py-4">Assigned</th><th className="px-5 py-4">Due</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr></thead><tbody>
-        {followups.map(f => <tr key={f.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{f.elderly_member_name}</div><div className="text-xs text-kMuted">{f.elderly_member_code}</div></td><td className="px-5 py-4 text-kMuted">{SOURCE_LABELS[f.source_type]}</td><td className="px-5 py-4 text-kMuted max-w-[220px] truncate">{f.reason}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${PRIORITY_STYLES[f.priority]}`}>{f.priority}</span></td><td className="px-5 py-4 text-kMuted">{f.assigned_to || 'Unassigned'}</td><td className="px-5 py-4 text-kMuted">{f.due_date ? <span className={f.is_overdue ? 'font-bold text-red-600' : ''}>{f.due_date}</span> : '—'}</td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_STYLES[f.status]}`}>{f.status}</span></td><td className="px-5 py-4"><button onClick={() => setEditFollowup(f)} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
+        {followups.map(f => <tr key={f.id} className="border-b border-kBorderSoft"><td className="px-5 py-4"><div className="font-semibold text-kInk">{f.elderly_member_name}</div><div className="text-xs text-kMuted">{f.elderly_member_code}</div></td><td className="px-5 py-4 text-kMuted">{SOURCE_LABELS[f.source_type]}</td><td className="px-5 py-4 text-kMuted max-w-[220px] truncate">{f.reason}</td><td className="px-5 py-4"><StatusBadge value={f.priority} /></td><td className="px-5 py-4 text-kMuted">{f.assigned_to || 'Unassigned'}</td><td className="px-5 py-4 text-kMuted">{f.due_date ? <span className={f.is_overdue ? 'font-bold text-red-600' : ''}>{f.due_date}</span> : '—'}</td><td className="px-5 py-4"><StatusBadge value={f.status} /></td><td className="px-5 py-4"><button onClick={() => setEditFollowup(f)} className="text-kOrange"><Pencil size={16} /></button></td></tr>)}
         {followups.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-kMuted">No follow-ups match your filters.</td></tr>}
       </tbody></table></div>
     </div>}

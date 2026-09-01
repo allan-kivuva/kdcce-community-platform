@@ -197,6 +197,41 @@ def test_assigned_volunteer_can_record_outcome(client, make_user, make_staff_use
     assert body["completed_at"] is not None
 
 
+def test_volunteer_completing_a_visit_is_audited(client, make_user, make_staff_user, auth_header):
+    """A volunteer completing their own assigned visit is still a
+    legitimate actor to record in the audit trail (not just admin/staff)."""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol_user, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token)
+    visit = client.post(
+        "/api/home-visits",
+        json={"elderly_member_id": member["id"], "assigned_to_id": vol_user["id"], **VALID_REASON},
+        headers=auth_header(admin_token),
+    ).get_json()["visit"]
+
+    resp = client.patch(
+        f"/api/home-visits/{visit['id']}",
+        json={"status": "Completed", "observations": "Doing well", "support_provided": "Groceries delivered"},
+        headers=auth_header(vol_token),
+    )
+    assert resp.status_code == 200
+
+    logs_resp = client.get(
+        f"/api/audit-logs?resource_type=home_visit&resource_id={visit['id']}", headers=auth_header(admin_token)
+    )
+    logs = logs_resp.get_json()["audit_logs"]
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["action"] == "update"
+    assert log["resource_id"] == visit["id"]
+    assert log["before"]["status"] == "Assigned"
+    assert log["after"]["status"] == "Completed"
+    for snapshot in (log["before"], log["after"]):
+        for key in snapshot:
+            assert "password" not in key.lower()
+            assert "token" not in key.lower()
+
+
 def test_assigned_volunteer_cannot_reassign_or_change_priority(client, make_user, make_staff_user, auth_header):
     _, admin_token = make_staff_user("admin")
     member = _register_member(client, admin_token, auth_header)
@@ -247,6 +282,83 @@ def test_admin_can_delete_visit(client, make_staff_user, auth_header):
     visit = client.post("/api/home-visits", json={"elderly_member_id": member["id"], **VALID_REASON}, headers=auth_header(token)).get_json()["visit"]
     resp = client.delete(f"/api/home-visits/{visit['id']}", headers=auth_header(token))
     assert resp.status_code == 204
+
+
+def test_staff_can_set_staff_notes_on_create(client, make_staff_user, auth_header):
+    _, token = make_staff_user("staff")
+    member = _register_member(client, token, auth_header)
+    resp = client.post("/api/home-visits", json={"elderly_member_id": member["id"], **VALID_REASON, "staff_notes": "Confidential note"}, headers=auth_header(token))
+    assert resp.status_code == 201
+    assert resp.get_json()["visit"]["staff_notes"] == "Confidential note"
+
+
+def test_staff_can_set_staff_notes_via_patch(client, make_staff_user, auth_header):
+    _, token = make_staff_user("staff")
+    member = _register_member(client, token, auth_header)
+    visit_id = client.post("/api/home-visits", json={"elderly_member_id": member["id"], **VALID_REASON}, headers=auth_header(token)).get_json()["visit"]["id"]
+
+    resp = client.patch(f"/api/home-visits/{visit_id}", json={"staff_notes": "Volunteer was late twice"}, headers=auth_header(token))
+    assert resp.status_code == 200
+    assert resp.get_json()["visit"]["staff_notes"] == "Volunteer was late twice"
+
+
+def test_staff_notes_never_appear_in_the_assigned_volunteers_own_view(client, make_user, make_staff_user, auth_header):
+    """The core authorization property: a volunteer viewing their OWN
+    assigned visit — which they otherwise have full read access to — must
+    never see staff_notes, whether via list, get, or the response to
+    their own PATCH."""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token)
+    visit_id = client.post(
+        "/api/home-visits",
+        json={"elderly_member_id": member["id"], **VALID_REASON, "assigned_to_id": vol["id"], "staff_notes": "Confidential — do not share with volunteer"},
+        headers=auth_header(admin_token),
+    ).get_json()["visit"]["id"]
+
+    # GET single, as the volunteer.
+    body = client.get(f"/api/home-visits/{visit_id}", headers=auth_header(vol_token)).get_json()["visit"]
+    assert "staff_notes" not in body
+
+    # GET list, as the volunteer.
+    listed = client.get("/api/home-visits", headers=auth_header(vol_token)).get_json()["visits"]
+    assert all("staff_notes" not in v for v in listed)
+
+    # The volunteer's own PATCH response.
+    patched = client.patch(f"/api/home-visits/{visit_id}", json={"status": "Accepted"}, headers=auth_header(vol_token)).get_json()["visit"]
+    assert "staff_notes" not in patched
+
+
+def test_staff_notes_do_appear_for_admin_and_staff(client, make_user, make_staff_user, auth_header):
+    _, admin_token = make_staff_user("admin")
+    _, staff_token = make_staff_user("staff", email="notesviewer@example.com")
+    member = _register_member(client, admin_token, auth_header)
+    vol, _ = _verified_volunteer(client, make_user, auth_header, admin_token, email="notes-vol@example.com")
+    visit_id = client.post(
+        "/api/home-visits",
+        json={"elderly_member_id": member["id"], **VALID_REASON, "assigned_to_id": vol["id"], "staff_notes": "Internal note"},
+        headers=auth_header(admin_token),
+    ).get_json()["visit"]["id"]
+
+    for token in (admin_token, staff_token):
+        body = client.get(f"/api/home-visits/{visit_id}", headers=auth_header(token)).get_json()["visit"]
+        assert body["staff_notes"] == "Internal note"
+        listed = client.get("/api/home-visits", headers=auth_header(token)).get_json()["visits"]
+        assert any(v.get("staff_notes") == "Internal note" for v in listed)
+
+
+def test_volunteer_cannot_set_staff_notes_via_their_own_patch(client, make_user, make_staff_user, auth_header):
+    """staff_notes isn't on the assignee-restricted schema at all, so a
+    volunteer trying to set it is simply ignored (not a validation
+    error) — same "unknown field just isn't a recognized key on this
+    narrower schema" shape as the rest of that schema's excluded fields."""
+    _, admin_token = make_staff_user("admin")
+    member = _register_member(client, admin_token, auth_header)
+    vol, vol_token = _verified_volunteer(client, make_user, auth_header, admin_token, email="notes-writer@example.com")
+    visit_id = client.post("/api/home-visits", json={"elderly_member_id": member["id"], **VALID_REASON, "assigned_to_id": vol["id"]}, headers=auth_header(admin_token)).get_json()["visit"]["id"]
+
+    resp = client.patch(f"/api/home-visits/{visit_id}", json={"status": "Accepted", "staff_notes": "Trying to set my own note"}, headers=auth_header(vol_token))
+    assert resp.status_code == 400  # unknown field on the assignee schema
 
 
 def test_staff_cannot_delete_visit(client, make_staff_user, auth_header):

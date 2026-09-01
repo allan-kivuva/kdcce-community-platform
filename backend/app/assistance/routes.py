@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..achievements.service import check_and_award
 from ..assignments.schemas import AssignmentMessageCreateSchema, AssignmentReviewCreateSchema
 from ..assignments.service import (
     AttachmentError, attachment_file_path, get_attachment, get_review, list_messages, save_photo, send_message, submit_review,
 )
+from ..audit.service import log_action
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..followups.service import create_from_source
@@ -15,6 +17,19 @@ from ..utils import get_or_404, validation_error_response
 from .schemas import AssistanceRequestAssigneeUpdateSchema, AssistanceRequestCreateSchema, AssistanceRequestStaffUpdateSchema
 
 bp = Blueprint("assistance", __name__, url_prefix="/api/assistance-requests")
+
+_SNAPSHOT_FIELDS = ("status", "assigned_to_id")
+
+
+def _snapshot(req):
+    snapshot = {}
+    for field in _SNAPSHOT_FIELDS:
+        value = getattr(req, field)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        snapshot[field] = value
+    return snapshot
+
 
 create_schema = AssistanceRequestCreateSchema()
 staff_update_schema = AssistanceRequestStaffUpdateSchema()
@@ -100,7 +115,7 @@ def create_request():
             related_resource_type="assistance_request", related_resource_id=req.id,
         )
     db.session.commit()
-    return jsonify(request=req.to_dict()), 201
+    return jsonify(request=req.to_dict(include_private=True)), 201
 
 
 @bp.get("")
@@ -134,7 +149,8 @@ def list_requests():
         query = query.filter(AssistanceRequest.request_type == request_type)
 
     requests_ = query.order_by(AssistanceRequest.created_at.desc()).all()
-    return jsonify(requests=[r.to_dict() for r in requests_]), 200
+    include_private = role in ("admin", "staff")
+    return jsonify(requests=[r.to_dict(include_private=include_private) for r in requests_]), 200
 
 
 @bp.get("/<int:request_id>")
@@ -146,7 +162,7 @@ def get_request(request_id):
         identity = int(get_jwt_identity())
         if req.assigned_to_id != identity or not _is_verified_volunteer(identity):
             return jsonify(error="Forbidden"), 403
-    return jsonify(request=req.to_dict()), 200
+    return jsonify(request=req.to_dict(include_private=role in ("admin", "staff"))), 200
 
 
 @bp.patch("/<int:request_id>")
@@ -183,13 +199,19 @@ def update_request(request_id):
 
     if data.get("status") == "Started" and req.started_at is None:
         data["started_at"] = utcnow()
-    if data.get("status") == "Completed" and req.completed_at is None:
+    just_completed = data.get("status") == "Completed" and req.completed_at is None
+    if just_completed:
         data["completed_at"] = utcnow()
 
     previous_assignee = req.assigned_to_id
     was_follow_up_required = req.follow_up_required
+    before = _snapshot(req)
     for field, value in data.items():
         setattr(req, field, value)
+
+    after = _snapshot(req)
+    if after != before:
+        log_action(int(get_jwt_identity()), "update", "assistance_request", req.id, before=before, after=after)
 
     if req.assigned_to_id and req.assigned_to_id != previous_assignee:
         notify(
@@ -205,8 +227,13 @@ def update_request(request_id):
             int(get_jwt_identity()), assigned_to_id=req.assigned_to_id,
         )
 
+    if just_completed and req.assigned_to_id:
+        assignee_profile = VolunteerProfile.query.filter_by(user_id=req.assigned_to_id).first()
+        if assignee_profile is not None:
+            check_and_award(req.assigned_to_id, assignee_profile.id)
+
     db.session.commit()
-    return jsonify(request=req.to_dict()), 200
+    return jsonify(request=req.to_dict(include_private=role in ("admin", "staff"))), 200
 
 
 @bp.post("/<int:request_id>/accept")

@@ -11,9 +11,15 @@ import MyAssistanceRequests from './volunteer/MyAssistanceRequests'
 import MyElderlyMembers from './volunteer/MyElderlyMembers'
 import MyActivity from './volunteer/MyActivity'
 import MyPerformance from './volunteer/MyPerformance'
+import TrainingCenter from './volunteer/TrainingCenter'
+import MyDocuments from './volunteer/MyDocuments'
+import DigitalId from './volunteer/DigitalId'
 import VolunteerMessages from './volunteer/VolunteerMessages'
+import Announcements from './volunteer/Announcements'
+import VolunteerPrograms from './volunteer/VolunteerPrograms'
 import ReportConcern from './volunteer/ReportConcern'
 import VolunteerNotifications from './volunteer/VolunteerNotifications'
+import VolunteerAssistant from './volunteer/VolunteerAssistant'
 import Toast from '../components/admin/Toast'
 import { VolunteerDataProvider } from '../lib/VolunteerDataContext'
 
@@ -80,13 +86,19 @@ export default function VolunteerPortal() {
   return <VolunteerDataProvider>
     <Routes>
       <Route index element={<VolunteerDashboard profile={profile} />} />
+      <Route path="assistant" element={<VolunteerAssistant />} />
       <Route path="profile" element={<MyVolunteerProfile showToast={showToast} />} />
       <Route path="home-visits" element={<MyAssignments showToast={showToast} />} />
       <Route path="assistance" element={<MyAssistanceRequests showToast={showToast} />} />
       <Route path="elderly-members" element={<MyElderlyMembers />} />
       <Route path="activity" element={<MyActivity />} />
+      <Route path="programs" element={<VolunteerPrograms showToast={showToast} />} />
       <Route path="performance" element={<MyPerformance />} />
-      <Route path="messages" element={<VolunteerMessages />} />
+      <Route path="training" element={<TrainingCenter showToast={showToast} />} />
+      <Route path="documents" element={<MyDocuments showToast={showToast} />} />
+      <Route path="digital-id" element={<DigitalId />} />
+      <Route path="messages" element={<VolunteerMessages showToast={showToast} />} />
+      <Route path="announcements" element={<Announcements />} />
       <Route path="report-concern" element={<ReportConcern showToast={showToast} />} />
       <Route path="notifications" element={<VolunteerNotifications />} />
     </Routes>

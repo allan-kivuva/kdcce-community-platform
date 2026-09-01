@@ -2,11 +2,13 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from marshmallow import ValidationError
 
+from ..achievements.service import check_and_award
 from ..assignments.schemas import AssignmentMessageCreateSchema, AssignmentReviewCreateSchema, ChecklistItemUpdateSchema
 from ..assignments.service import (
     AttachmentError, ChecklistError, attachment_file_path, get_attachment, get_checklist, get_review, list_messages,
     save_photo, send_message, set_checklist_item, submit_review,
 )
+from ..audit.service import log_action
 from ..auth.decorators import roles_required
 from ..extensions import db
 from ..followups.service import create_from_source
@@ -16,6 +18,19 @@ from ..utils import get_or_404, validation_error_response
 from .schemas import HomeVisitAssigneeUpdateSchema, HomeVisitCreateSchema, HomeVisitStaffUpdateSchema
 
 bp = Blueprint("homevisits", __name__, url_prefix="/api/home-visits")
+
+_SNAPSHOT_FIELDS = ("status", "assigned_to_id")
+
+
+def _snapshot(visit):
+    snapshot = {}
+    for field in _SNAPSHOT_FIELDS:
+        value = getattr(visit, field)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        snapshot[field] = value
+    return snapshot
+
 
 create_schema = HomeVisitCreateSchema()
 staff_update_schema = HomeVisitStaffUpdateSchema()
@@ -113,7 +128,7 @@ def create_visit():
             related_resource_type="home_visit", related_resource_id=visit.id,
         )
     db.session.commit()
-    return jsonify(visit=visit.to_dict()), 201
+    return jsonify(visit=visit.to_dict(include_private=True)), 201
 
 
 @bp.get("")
@@ -144,7 +159,8 @@ def list_visits():
         query = query.filter(HomeVisit.priority == priority)
 
     visits = query.order_by(HomeVisit.created_at.desc()).all()
-    return jsonify(visits=[v.to_dict() for v in visits]), 200
+    include_private = role in ("admin", "staff")
+    return jsonify(visits=[v.to_dict(include_private=include_private) for v in visits]), 200
 
 
 @bp.get("/<int:visit_id>")
@@ -156,7 +172,7 @@ def get_visit(visit_id):
         identity = int(get_jwt_identity())
         if visit.assigned_to_id != identity or not _is_verified_volunteer(identity):
             return jsonify(error="Forbidden"), 403
-    return jsonify(visit=visit.to_dict()), 200
+    return jsonify(visit=visit.to_dict(include_private=role in ("admin", "staff"))), 200
 
 
 @bp.patch("/<int:visit_id>")
@@ -189,13 +205,19 @@ def update_visit(visit_id):
 
     if data.get("status") == "Started" and visit.started_at is None:
         data["started_at"] = utcnow()
-    if data.get("status") == "Completed" and visit.completed_at is None:
+    just_completed = data.get("status") == "Completed" and visit.completed_at is None
+    if just_completed:
         data["completed_at"] = utcnow()
 
     previous_assignee = visit.assigned_to_id
     was_follow_up_required = visit.follow_up_required
+    before = _snapshot(visit)
     for field, value in data.items():
         setattr(visit, field, value)
+
+    after = _snapshot(visit)
+    if after != before:
+        log_action(int(get_jwt_identity()), "update", "home_visit", visit.id, before=before, after=after)
 
     if visit.assigned_to_id and visit.assigned_to_id != previous_assignee:
         notify(
@@ -211,8 +233,16 @@ def update_visit(visit_id):
             int(get_jwt_identity()), assigned_to_id=visit.assigned_to_id,
         )
 
+    if just_completed and visit.assigned_to_id:
+        # Only a volunteer has a VolunteerProfile (staff/admin assignees
+        # don't) — achievements are a volunteer-engagement feature, so
+        # this is a no-op for a visit a staff member completed themselves.
+        assignee_profile = VolunteerProfile.query.filter_by(user_id=visit.assigned_to_id).first()
+        if assignee_profile is not None:
+            check_and_award(visit.assigned_to_id, assignee_profile.id)
+
     db.session.commit()
-    return jsonify(visit=visit.to_dict()), 200
+    return jsonify(visit=visit.to_dict(include_private=role in ("admin", "staff"))), 200
 
 
 @bp.post("/<int:visit_id>/photo")

@@ -1,21 +1,32 @@
 import { useState } from 'react'
-import { Routes, Route, Link } from 'react-router-dom'
-import { BarChart3, Search, Plus, Trash2, Pencil, ChevronDown, Settings } from 'lucide-react'
+import { Routes, Route } from 'react-router-dom'
+import { Search, Plus, Trash2, Pencil, Settings } from 'lucide-react'
 import Modal from '../components/admin/Modal'
 import Toast from '../components/admin/Toast'
 import Shell from '../components/admin/Shell'
 import { useToast, errorMessage, LoadingState, ErrorState } from '../components/admin/adminHelpers'
 import { useApiResource } from '../lib/useApiResource'
+import CommandCenter from './admin/CommandCenter'
 import ElderlyManager from './admin/ElderlyManager'
 import ElderlyProfile from './admin/ElderlyProfile'
 import FollowUpsManager from './admin/FollowUpsManager'
 import AssignmentCalendar from './admin/AssignmentCalendar'
+import RecurringVisitsManager from './admin/RecurringVisitsManager'
 import AttendanceManager from './admin/AttendanceManager'
 import HealthManager from './admin/HealthManager'
 import MedicationManager from './admin/MedicationManager'
 import VolunteerManager from './admin/VolunteerManager'
+import TrainingManager from './admin/TrainingManager'
+import MessagesManager from './admin/MessagesManager'
+import AnnouncementsManager from './admin/AnnouncementsManager'
+import ProgramsManager from './admin/ProgramsManager'
 import HomeVisitManager from './admin/HomeVisitManager'
 import DonationsManager from './admin/DonationsManager'
+import DonorsManager from './admin/DonorsManager'
+import CampaignsManager from './admin/CampaignsManager'
+import ExpensesManager from './admin/ExpensesManager'
+import BudgetsManager from './admin/BudgetsManager'
+import FinanceDashboard from './admin/FinanceDashboard'
 import FeedingManager from './admin/FeedingManager'
 import InventoryManager from './admin/InventoryManager'
 import ActivityManager from './admin/ActivityManager'
@@ -24,37 +35,17 @@ import IncidentManager from './admin/IncidentManager'
 import ReportsManager from './admin/ReportsManager'
 import AnalyticsManager from './admin/AnalyticsManager'
 import InboxManager from './admin/InboxManager'
-
-function QuickActionMenu() {
-  const [open, setOpen] = useState(false)
-  const actions = [['Add donation', '/admin/donations'], ['New blog post', '/admin/blog'], ['Add craft item', '/admin/crafts']]
-  return <div className="relative">
-    <button onClick={() => setOpen(o => !o)} className="btn-orange"><Plus size={16} /> Quick action <ChevronDown size={14} /></button>
-    {open && <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-kBorderSoft bg-kSurface shadow-soft dark:shadow-none" onMouseLeave={() => setOpen(false)}>
-      {actions.map(([label, to]) => <Link key={to} to={to} onClick={() => setOpen(false)} className="block px-4 py-3 text-sm font-semibold text-kGreen hover:bg-kCream">{label}</Link>)}
-    </div>}
-  </div>
-}
-
-function StatCard({ a, b, c }) { return <div className="card-k p-5"><div className="text-sm text-kMuted">{a}</div><div className="mt-2 font-display text-3xl font-bold text-kGreen">{b}</div><div className="mt-2 text-xs font-semibold text-kOrange">{c}</div></div> }
-
-function frequencyLabel(freq) { return freq === 'monthly' ? 'Monthly' : 'One-time' }
-
-function Overview({ donations, blogPosts, crafts }) {
-  const total = donations.reduce((s, d) => s + Number(d.amount), 0)
-  const publishedThisMonth = blogPosts.filter(p => p.status === 'Published').length
-  const availableCrafts = crafts.filter(c => c.status === 'Available').length
-  const stats = [['Total donations', `KES ${total.toLocaleString()}`, `${donations.length} donors`], ['This month', `KES ${total.toLocaleString()}`, `${donations.length} donors`], ['Blog posts', String(blogPosts.length), `${publishedThisMonth} published`], ['Craft items', String(crafts.length), `${availableCrafts} available now`]]
-  const recent = [...donations].sort((a, b) => b.id - a.id).slice(0, 4)
-  return <Shell>
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><div className="eyebrow">Overview</div><h1 className="font-display text-3xl font-bold text-kGreen">Good morning, staff.</h1></div><QuickActionMenu /></div>
-    <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([a, b, c]) => <StatCard key={a} a={a} b={b} c={c} />)}</div>
-    <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
-      <div className="card-k p-6"><div className="flex items-center justify-between"><h2 className="font-display text-xl font-bold text-kGreen">Recent donations</h2><Link to="/admin/donations" className="text-sm font-semibold text-kOrange">View all</Link></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="border-b border-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="pb-3">Donor</th><th>Amount</th><th>Frequency</th><th>Status</th><th>Date</th></tr></thead><tbody>{recent.map(r => <tr key={r.id} className="border-b border-kBorderSoft"><td className="py-4 font-semibold text-kInk">{r.donor_name}</td><td className="text-kMuted">KES {Number(r.amount).toLocaleString()}</td><td className="text-kMuted">{frequencyLabel(r.frequency)}</td><td className="text-kMuted">{r.status}</td><td className="text-kMuted">{r.created_at.slice(0, 10)}</td></tr>)}</tbody></table></div></div>
-      <div className="card-k p-6"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-kTint text-kOrange"><BarChart3 /></div><div><h2 className="font-display text-xl font-bold text-kGreen">Impact pulse</h2><p className="text-sm text-kMuted">Donations this week</p></div></div><div className="mt-8 flex h-36 items-end justify-between gap-3">{[42, 66, 49, 80, 58, 72, 91].map((v, i) => <div key={i} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-lg bg-kOrange/75" style={{ height: `${v}%` }} /><span className="text-[10px] text-kMuted">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}</span></div>)}</div></div>
-    </div>
-  </Shell>
-}
+import UsersManager from './admin/UsersManager'
+import AuditLogViewer from './admin/AuditLogViewer'
+import SessionsManager from './admin/SessionsManager'
+import SecurityDashboard from './admin/SecurityDashboard'
+import OperationsMap from './admin/OperationsMap'
+import SmartMatching from './admin/SmartMatching'
+import ConsentManager from './admin/ConsentManager'
+import FamilyAccessManager from './admin/FamilyAccessManager'
+import ImportsManager from './admin/ImportsManager'
+import AIAssistant from './admin/AIAssistant'
+import AIInsights from './admin/AIInsights'
 
 function BlogManager({ posts, loading, error, reload, addPost, patchPost, deletePost, showToast }) {
   const [q, setQ] = useState('')
@@ -221,7 +212,6 @@ function SettingsPage({ showToast }) {
 }
 
 export default function AdminDashboard() {
-  const donationsApi = useApiResource('/api/donations', { listKey: 'donations', itemKey: 'donation' })
   const blogApi = useApiResource('/api/admin/blog', { listKey: 'posts', itemKey: 'post' })
   const galleryApi = useApiResource('/api/gallery', { listKey: 'images', itemKey: 'image' })
   const teamApi = useApiResource('/api/team', { listKey: 'team', itemKey: 'member' })
@@ -230,7 +220,7 @@ export default function AdminDashboard() {
 
   return <>
     <Routes>
-      <Route index element={<Overview donations={donationsApi.items} blogPosts={blogApi.items} crafts={craftsApi.items} />} />
+      <Route index element={<CommandCenter showToast={showToast} />} />
       <Route path="elderly" element={<ElderlyManager showToast={showToast} />} />
       <Route path="elderly/:id" element={<ElderlyProfile />} />
       <Route path="followups" element={<FollowUpsManager showToast={showToast} />} />
@@ -240,7 +230,17 @@ export default function AdminDashboard() {
       <Route path="medication" element={<MedicationManager showToast={showToast} />} />
       <Route path="volunteers" element={<VolunteerManager showToast={showToast} />} />
       <Route path="home-visits" element={<HomeVisitManager showToast={showToast} />} />
+      <Route path="recurring-visits" element={<RecurringVisitsManager showToast={showToast} />} />
+      <Route path="training" element={<TrainingManager showToast={showToast} />} />
+      <Route path="messages" element={<MessagesManager showToast={showToast} />} />
+      <Route path="announcements" element={<AnnouncementsManager showToast={showToast} />} />
+      <Route path="programs" element={<ProgramsManager showToast={showToast} />} />
       <Route path="donations" element={<DonationsManager showToast={showToast} />} />
+      <Route path="donors" element={<DonorsManager showToast={showToast} />} />
+      <Route path="campaigns" element={<CampaignsManager showToast={showToast} />} />
+      <Route path="expenses" element={<ExpensesManager showToast={showToast} />} />
+      <Route path="budgets" element={<BudgetsManager showToast={showToast} />} />
+      <Route path="finance" element={<FinanceDashboard />} />
       <Route path="feeding" element={<FeedingManager showToast={showToast} />} />
       <Route path="inventory" element={<InventoryManager showToast={showToast} />} />
       <Route path="activities" element={<ActivityManager showToast={showToast} />} />
@@ -269,6 +269,17 @@ export default function AdminDashboard() {
         deleteCraft={id => craftsApi.remove(id, '/api/admin/crafts')}
         showToast={showToast} />} />
       <Route path="inbox" element={<InboxManager showToast={showToast} />} />
+      <Route path="users" element={<UsersManager showToast={showToast} />} />
+      <Route path="audit-logs" element={<AuditLogViewer showToast={showToast} />} />
+      <Route path="sessions" element={<SessionsManager showToast={showToast} />} />
+      <Route path="security" element={<SecurityDashboard showToast={showToast} />} />
+      <Route path="operations-map" element={<OperationsMap />} />
+      <Route path="matching" element={<SmartMatching showToast={showToast} />} />
+      <Route path="consents" element={<ConsentManager showToast={showToast} />} />
+      <Route path="family-access" element={<FamilyAccessManager showToast={showToast} />} />
+      <Route path="imports" element={<ImportsManager showToast={showToast} />} />
+      <Route path="ai-assistant" element={<AIAssistant showToast={showToast} />} />
+      <Route path="ai-insights" element={<AIInsights showToast={showToast} />} />
       <Route path="settings" element={<SettingsPage showToast={showToast} />} />
     </Routes>
     <Toast message={toast} />

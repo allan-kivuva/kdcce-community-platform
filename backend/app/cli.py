@@ -4,8 +4,10 @@ import click
 from flask.cli import with_appcontext
 
 from .extensions import db
-from .models import OPA, ROLES, ElderlyMember, HomeVisit, User, VolunteerProfile, utcnow
+from .models import OPA, ROLES, ElderlyMember, HomeVisit, RecurringVisitSeries, User, VolunteerProfile, utcnow
 from .notifications.service import notify
+from .recurring_visits.service import generate_occurrences
+from .reports.service import operational_summary
 
 
 @click.command("seed-admin")
@@ -29,6 +31,33 @@ def seed_admin(name, email, password, role):
     db.session.add(user)
     db.session.commit()
     click.echo(f"Created {role} user: {email}")
+
+
+@click.command("generate-recurring-visits")
+@with_appcontext
+def generate_recurring_visits():
+    """Tops up every Active RecurringVisitSeries with any occurrences due
+    within the next generate_occurrences() horizon that haven't been
+    materialized yet. Meant to be run on a plain OS cron (e.g. daily) —
+    intentionally NOT triggered by the running app itself (no scheduler/
+    job queue here); safe to run as often as you like, including never —
+    each series already gets its first batch generated at creation time,
+    this just extends the window over time so a long-running or
+    open-ended series keeps having upcoming visits materialized."""
+    series_list = RecurringVisitSeries.query.filter_by(status="Active").all()
+    total_created = 0
+    for series in series_list:
+        created = generate_occurrences(series)
+        total_created += len(created)
+        for visit in created:
+            if visit.assigned_to_id:
+                notify(
+                    visit.assigned_to_id, "Home Visit Assignment", "Home visit assigned to you",
+                    f"You have been assigned a home visit for {visit.elderly_member.full_name}.",
+                    related_resource_type="home_visit", related_resource_id=visit.id,
+                )
+    db.session.commit()
+    click.echo(f"Checked {len(series_list)} active series, created {total_created} new visit(s).")
 
 
 # ---------- Demo data (development/presentation only) ----------
@@ -260,3 +289,20 @@ def _seed_demo_activity(admin_or_staff, volunteers, elders, visits_by_volunteer)
         created.append("1 incident")
 
     return ("Added: " + ", ".join(created) + ".") if created else "No new demo activity to add (already seeded)."
+
+
+@click.command("generate-operational-report")
+@with_appcontext
+def generate_operational_report():
+    """Prints the same cross-module KPI snapshot GET
+    /api/reports/operational-summary returns — meant to be run on a
+    plain OS cron (e.g. weekly), same "not triggered by the running app
+    itself" convention as generate-recurring-visits. No email delivery
+    (this app has no email infrastructure — see the Phase 8 report);
+    redirect stdout to a file or a log collector if you want it kept."""
+    summary = operational_summary()
+    click.echo(f"Operational summary — generated {summary['generated_at']} (period since {summary['period_start']})")
+    for key, value in summary.items():
+        if key in ("generated_at", "period_start"):
+            continue
+        click.echo(f"  {key}: {value}")

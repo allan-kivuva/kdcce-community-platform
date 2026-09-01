@@ -18,6 +18,10 @@ const REPORTS = [
   { key: 'activities', label: 'Activities', endpoint: '/api/reports/activities', dateFilter: true, filters: [{ name: 'activity_type', label: 'Activity Type' }, { name: 'status', label: 'Status' }] },
   { key: 'assistance', label: 'Assistance Requests', endpoint: '/api/reports/assistance', dateFilter: true, filters: [{ name: 'request_type', label: 'Request Type' }, { name: 'assigned_to_id', label: 'Assignee ID' }] },
   { key: 'incidents', label: 'Incidents', endpoint: '/api/reports/incidents', dateFilter: true, filters: [{ name: 'incident_type', label: 'Incident Type' }] },
+  { key: 'campaigns', label: 'Campaigns', endpoint: '/api/reports/campaigns', dateFilter: false, filters: [] },
+  { key: 'expenses', label: 'Expenses', endpoint: '/api/reports/expenses', dateFilter: true, csv: '/api/reports/expenses/export.csv', filters: [] },
+  { key: 'budgets', label: 'Budgets', endpoint: '/api/reports/budgets', dateFilter: false, filters: [] },
+  { key: 'donors', label: 'Donors', endpoint: '/api/reports/donors', dateFilter: false, filters: [] },
 ]
 
 function StatCard({ label, value }) { return <div className="card-k p-5"><div className="text-sm text-kMuted">{label}</div><div className="mt-2 font-display text-3xl font-bold text-kGreen">{value}</div></div> }
@@ -128,6 +132,80 @@ function ReportBody({ reportKey, data }) {
         </div>
         <CountsTable title="By type" counts={data.by_type} />
         <ByDateTable title="By date" rows={data.by_date} valueKeys={[['count', 'Count']]} />
+        {data.by_campaign?.length > 0 && <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">By campaign</div>
+          <table className="w-full text-left text-sm"><tbody>
+            {data.by_campaign.map(row => <tr key={row.campaign} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 text-kInk">{row.campaign}</td><td className="px-5 py-2 text-kMuted">{row.count} donation(s)</td><td className="px-5 py-2 text-right font-semibold text-kMuted">KES {row.amount.toLocaleString()}</td></tr>)}
+          </tbody></table>
+        </div>}
+      </>
+    case 'campaigns':
+      return <>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="Total campaigns" value={data.total_count} />
+          <StatCard label="Top campaign raised (KES)" value={Number(data.top_campaigns[0]?.raised_amount || 0).toLocaleString()} />
+        </div>
+        <CountsTable title="By status" counts={data.by_status} />
+        <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">Raised vs goal</div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-3">Campaign</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Raised</th><th className="px-5 py-3 text-right">Goal</th><th className="px-5 py-3 text-right">%</th></tr></thead><tbody>
+            {data.campaigns.map(c => <tr key={c.id} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 font-semibold text-kInk">{c.name}</td><td className="px-5 py-2 text-kMuted">{c.status}</td><td className="px-5 py-2 text-right text-kMuted">KES {c.raised_amount.toLocaleString()}</td><td className="px-5 py-2 text-right text-kMuted">KES {c.goal_amount.toLocaleString()}</td><td className="px-5 py-2 text-right font-semibold text-kGreen">{c.percent_achieved ?? '—'}{c.percent_achieved != null ? '%' : ''}</td></tr>)}
+            {data.campaigns.length === 0 && <tr><td colSpan={5} className="px-5 py-6 text-center text-kMuted">No campaigns yet.</td></tr>}
+          </tbody></table></div>
+        </div>
+      </>
+    case 'expenses':
+      return <>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="Total expenses" value={data.total_count} />
+          <StatCard label="Total amount (KES)" value={Number(data.total_amount).toLocaleString()} />
+        </div>
+        <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">By category</div>
+          <table className="w-full text-left text-sm"><tbody>
+            {data.by_category.map(row => <tr key={row.category} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 text-kInk">{row.category}</td><td className="px-5 py-2 text-right font-semibold text-kMuted">KES {row.amount.toLocaleString()}</td></tr>)}
+          </tbody></table>
+        </div>
+        <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">By program</div>
+          <table className="w-full text-left text-sm"><tbody>
+            {data.by_program.map((row, i) => <tr key={i} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 text-kInk">{row.program_name || 'Unassigned'}</td><td className="px-5 py-2 text-right font-semibold text-kMuted">KES {row.amount.toLocaleString()}</td></tr>)}
+          </tbody></table>
+        </div>
+        <ByDateTable title="By month" rows={data.by_month} dateKey="month" valueKeys={[['amount', 'Amount (KES)']]} />
+      </>
+    case 'budgets':
+      return <>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="Total allocated (KES)" value={Number(data.total_allocated).toLocaleString()} />
+          <StatCard label="Total spent (KES)" value={Number(data.total_spent).toLocaleString()} />
+        </div>
+        {data.over_budget_programs.length > 0 && <div className="card-k mt-5 overflow-hidden border-red-200">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-red-500">Over budget</div>
+          <table className="w-full text-left text-sm"><tbody>
+            {data.over_budget_programs.map(b => <tr key={b.id} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 font-semibold text-kInk">{b.program_name}</td><td className="px-5 py-2 text-right text-red-500">KES {b.spent.toLocaleString()} / {b.allocated_amount.toLocaleString()}</td></tr>)}
+          </tbody></table>
+        </div>}
+        <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">All budgets</div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="bg-kBorderSoft text-xs uppercase tracking-wider text-kMuted"><tr><th className="px-5 py-3">Program</th><th className="px-5 py-3 text-right">Allocated</th><th className="px-5 py-3 text-right">Spent</th><th className="px-5 py-3 text-right">Remaining</th></tr></thead><tbody>
+            {data.budgets.map(b => <tr key={b.id} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 font-semibold text-kInk">{b.program_name}</td><td className="px-5 py-2 text-right text-kMuted">KES {b.allocated_amount.toLocaleString()}</td><td className="px-5 py-2 text-right text-kMuted">KES {b.spent.toLocaleString()}</td><td className="px-5 py-2 text-right font-semibold text-kGreen">KES {b.remaining.toLocaleString()}</td></tr>)}
+          </tbody></table></div>
+        </div>
+      </>
+    case 'donors':
+      return <>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="Total donors" value={data.donor_count} />
+          <StatCard label="Repeat donors" value={data.repeat_donors} />
+        </div>
+        <div className="card-k mt-5 overflow-hidden">
+          <div className="border-b border-kBorderSoft px-5 py-3 text-sm font-bold text-kGreen">Top donors</div>
+          <table className="w-full text-left text-sm"><tbody>
+            {data.top_donors.map(d => <tr key={d.id} className="border-b border-kBorderSoft last:border-0"><td className="px-5 py-2 font-semibold text-kInk">{d.name}</td><td className="px-5 py-2 text-kMuted">{d.donation_count} donation(s)</td><td className="px-5 py-2 text-right font-semibold text-kGreen">KES {d.lifetime_amount.toLocaleString()}</td></tr>)}
+            {data.top_donors.length === 0 && <tr><td colSpan={3} className="px-5 py-6 text-center text-kMuted">No donors yet.</td></tr>}
+          </tbody></table>
+        </div>
       </>
     case 'activities':
       return <>

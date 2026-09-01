@@ -66,15 +66,21 @@ class DonationUpdateSchema(Schema):
     """Admin/staff-only edit. Unlike creation, status IS editable here —
     it's an authenticated internal workflow change, not a payment claim.
     No load_default on any field (including the new ones): omitted on a
-    partial PATCH must mean "leave it alone," never "reset it.\""""
+    partial PATCH must mean "leave it alone," never "reset it."
+    donor_id/campaign_id (Phase 6) let staff correct or set the
+    structured link by hand — e.g. attaching an old donation to a donor
+    record after the fact — without touching the original free-text
+    donor_name/campaign fields at all."""
 
     donation_type = fields.String(validate=validate.OneOf(DONATION_TYPES))
     donor_name = fields.String(validate=validate.Length(min=1, max=120))
     donor_email = fields.Email(allow_none=True)
     donor_phone = fields.String(allow_none=True, validate=validate.Length(max=40))
+    donor_id = fields.Integer(allow_none=True)
     amount = fields.Decimal(allow_none=True, as_string=False, places=2, validate=validate.Range(min=0.01))
     frequency = fields.String(validate=validate.OneOf(DONATION_FREQUENCIES))
     campaign = fields.String(allow_none=True, validate=validate.Length(max=120))
+    campaign_id = fields.Integer(allow_none=True)
     payment_method = fields.String(allow_none=True, validate=validate.OneOf(ALLOWED_PAYMENT_METHODS))
     item_description = fields.String(allow_none=True, validate=validate.Length(max=1000))
     quantity = fields.Decimal(allow_none=True, as_string=False, places=2, validate=validate.Range(min=0.01))

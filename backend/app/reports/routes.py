@@ -2,10 +2,13 @@ from flask import Blueprint, jsonify, request
 
 from ..auth.decorators import roles_required
 from ..extensions import db
+from ..budgets.service import budget_spent, budget_warning_level
+from . import service as reports_service
 from ..models import (
-    Activity, ActivityParticipant, AssistanceRequest, Attendance, Donation, ElderlyMember,
+    Activity, ActivityParticipant, AssistanceRequest, Attendance, Budget, Campaign, Donation,
+    DONATION_COUNTED_STATUSES, Donor, ElderlyMember, EXPENSE_COUNTED_STATUSES, Expense,
     FollowUp, HealthRecord, HomeVisit, Incident, InventoryItem, Meal, MealAttendance, Medication,
-    MedicationAdministration, StockMovement, User, VolunteerProfile,
+    MedicationAdministration, Program, StockMovement, User, VolunteerProfile,
 )
 from ..utils import ReportFilterError, csv_response, parse_date_range
 
@@ -401,12 +404,22 @@ def donations_report():
         donations.with_entities(db.func.date(Donation.created_at), db.func.count())
         .group_by(db.func.date(Donation.created_at)).order_by(db.func.date(Donation.created_at).asc()).all()
     )
+    # Phase 6: counted (Paid/Received) donations grouped by free-text
+    # campaign label — deliberately the text field, not campaign_id, so
+    # this still reflects every donation including ones from before any
+    # Campaign record existed to link to.
+    by_campaign_rows = (
+        donations.filter(Donation.status.in_(DONATION_COUNTED_STATUSES), Donation.campaign.isnot(None))
+        .with_entities(Donation.campaign, db.func.coalesce(db.func.sum(Donation.amount), 0), db.func.count())
+        .group_by(Donation.campaign).order_by(db.func.coalesce(db.func.sum(Donation.amount), 0).desc()).all()
+    )
 
     return jsonify(report={
         "total_count": donations.count(),
         "by_type": _count_by(donations, Donation.donation_type),
         "cash_total": float(cash_total),
         "by_date": [{"date": d, "count": c} for d, c in by_date_rows],
+        "by_campaign": [{"campaign": c, "amount": float(a), "count": n} for c, a, n in by_campaign_rows],
     }), 200
 
 
@@ -440,6 +453,130 @@ def donations_history():
         donations=[d.to_dict() for d in page_items],
         pagination={"page": page, "per_page": per_page, "total": total, "pages": (total + per_page - 1) // per_page if per_page else 0},
     ), 200
+
+
+# ---------- Campaigns (Phase 6) ----------
+
+@bp.get("/campaigns")
+@roles_required(*_REPORT_ROLES)
+def campaigns_report():
+    campaigns = Campaign.query.all()
+    rows = []
+    for c in campaigns:
+        counted = Donation.query.filter_by(campaign_id=c.id).filter(Donation.status.in_(DONATION_COUNTED_STATUSES)).all()
+        raised = sum((d.amount for d in counted if d.amount is not None), 0)
+        rows.append({
+            "id": c.id, "name": c.name, "status": c.status, "goal_amount": float(c.goal_amount),
+            "raised_amount": float(raised), "donation_count": len(counted),
+            "percent_achieved": round((float(raised) / float(c.goal_amount)) * 100, 1) if c.goal_amount and c.goal_amount > 0 else None,
+        })
+    top_campaigns = sorted(rows, key=lambda r: r["raised_amount"], reverse=True)[:5]
+    return jsonify(report={
+        "total_count": len(rows),
+        "by_status": _count_by(Campaign.query, Campaign.status),
+        "campaigns": rows,
+        "top_campaigns": top_campaigns,
+    }), 200
+
+
+# ---------- Expenses (Phase 6) ----------
+
+@bp.get("/expenses")
+@roles_required(*_REPORT_ROLES)
+def expenses_report():
+    date_from, date_to, err = _parse_dates()
+    if err:
+        return err
+
+    expenses = Expense.query.filter(Expense.status.in_(EXPENSE_COUNTED_STATUSES))
+    if date_from:
+        expenses = expenses.filter(Expense.expense_date >= date_from)
+    if date_to:
+        expenses = expenses.filter(Expense.expense_date <= date_to)
+
+    total = expenses.with_entities(db.func.coalesce(db.func.sum(Expense.amount), 0)).scalar()
+    by_category_rows = expenses.with_entities(Expense.category, db.func.coalesce(db.func.sum(Expense.amount), 0)).group_by(Expense.category).all()
+    by_program_rows = (
+        expenses.with_entities(Expense.program_id, db.func.coalesce(db.func.sum(Expense.amount), 0))
+        .group_by(Expense.program_id).all()
+    )
+    by_date_rows = (
+        expenses.with_entities(db.func.strftime("%Y-%m", Expense.expense_date), db.func.coalesce(db.func.sum(Expense.amount), 0))
+        .group_by(db.func.strftime("%Y-%m", Expense.expense_date)).order_by(db.func.strftime("%Y-%m", Expense.expense_date).asc()).all()
+    )
+    programs_by_id = {p.id: p.name for p in Program.query.all()}
+
+    return jsonify(report={
+        "total_count": expenses.count(),
+        "total_amount": float(total),
+        "by_category": [{"category": cat, "amount": float(amt)} for cat, amt in by_category_rows],
+        "by_program": [{"program_id": pid or None, "program_name": programs_by_id.get(pid), "amount": float(amt)} for pid, amt in by_program_rows],
+        "by_month": [{"month": m, "amount": float(amt)} for m, amt in by_date_rows],
+    }), 200
+
+
+@bp.get("/expenses/export.csv")
+@roles_required(*_REPORT_ROLES)
+def export_expenses_csv():
+    expenses = Expense.query.order_by(Expense.expense_date.desc()).all()
+    headers = ["Date", "Category", "Amount", "Program", "Campaign", "Vendor", "Status", "Recorded By", "Description"]
+    rows = [
+        [
+            e.expense_date.isoformat(), e.category, float(e.amount), e.program.name if e.program else "",
+            e.campaign.name if e.campaign else "", e.vendor_name or "", e.status, e.recorded_by.name, e.description or "",
+        ]
+        for e in expenses
+    ]
+    return csv_response("expenses.csv", headers, rows)
+
+
+# ---------- Budgets (Phase 6) ----------
+
+@bp.get("/budgets")
+@roles_required(*_REPORT_ROLES)
+def budgets_report():
+    budgets = Budget.query.all()
+    rows = []
+    for b in budgets:
+        spent = budget_spent(b)
+        allocated = float(b.allocated_amount)
+        rows.append({
+            "id": b.id, "program_id": b.program_id, "program_name": b.program.name if b.program else None,
+            "allocated_amount": allocated, "spent": spent, "remaining": allocated - spent,
+            "warning_level": budget_warning_level(allocated, spent),
+        })
+    over_budget = [r for r in rows if r["warning_level"] == "exceeded"]
+    return jsonify(report={
+        "total_allocated": sum(r["allocated_amount"] for r in rows),
+        "total_spent": sum(r["spent"] for r in rows),
+        "budgets": rows,
+        "over_budget_programs": over_budget,
+    }), 200
+
+
+# ---------- Donors (Phase 6) ----------
+
+@bp.get("/donors")
+@roles_required(*_REPORT_ROLES)
+def donors_report():
+    donors = Donor.query.all()
+    donations_by_donor = {}
+    for d in Donation.query.filter(Donation.donor_id.isnot(None), Donation.status.in_(DONATION_COUNTED_STATUSES)).all():
+        donations_by_donor.setdefault(d.donor_id, []).append(d)
+
+    rows = []
+    for donor in donors:
+        donor_donations = donations_by_donor.get(donor.id, [])
+        lifetime = sum((d.amount for d in donor_donations if d.amount is not None), 0)
+        rows.append({"id": donor.id, "name": donor.name, "donation_count": len(donor_donations), "lifetime_amount": float(lifetime)})
+
+    repeat_donors = sum(1 for r in rows if r["donation_count"] > 1)
+    top_donors = sorted(rows, key=lambda r: r["lifetime_amount"], reverse=True)[:10]
+    return jsonify(report={
+        "donor_count": len(donors),
+        "repeat_donors": repeat_donors,
+        "top_donors": top_donors,
+    }), 200
 
 
 # ---------- Activities ----------
@@ -550,3 +687,14 @@ def incidents_report():
         "follow_up_required": incidents.filter(Incident.follow_up_required.is_(True)).count(),
         "resolved": incidents.filter(Incident.status.in_(("Resolved", "Closed"))).count(),
     }), 200
+
+
+@bp.get("/operational-summary")
+@roles_required(*_REPORT_ROLES)
+def operational_summary_report():
+    """A compact, cross-module KPI snapshot — the same function the
+    `generate-operational-report` CLI command uses (see cli.py), so the
+    on-demand API result and a cron-generated snapshot can never
+    diverge. Deliberately not a re-implementation of the other, more
+    detailed per-module reports already on this blueprint."""
+    return jsonify(report=reports_service.operational_summary()), 200

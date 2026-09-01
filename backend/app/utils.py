@@ -47,13 +47,32 @@ def validation_error_response(err):
     return jsonify(error="Validation failed", details=err.messages), 400
 
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _sanitize_csv_cell(value):
+    """A cell whose text starts with =, +, -, or @ is interpreted as a
+    formula by Excel/Sheets/LibreOffice when the file is opened — since
+    several of this app's CSV exports include user-entered free text
+    (names, notes, reasons, imported rows), prefixing a leading `'`
+    neutralizes that without changing what a human sees (spreadsheet
+    apps hide a leading apostrophe on a text cell). Only applied to
+    strings; numbers/None/etc. pass through untouched."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def csv_response(filename, headers, rows):
     """Build a proper CSV download response. Python's csv module handles
-    quoting/escaping (embedded commas, quotes, newlines) automatically."""
+    quoting/escaping (embedded commas, quotes, newlines) automatically;
+    _sanitize_csv_cell additionally guards every exported cell (headers
+    included, since a CSV import's own column headers are also
+    attacker-controlled input) against spreadsheet formula injection."""
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(headers)
-    writer.writerows(rows)
+    writer.writerow([_sanitize_csv_cell(h) for h in headers])
+    writer.writerows([_sanitize_csv_cell(cell) for cell in row] for row in rows)
     return Response(
         buffer.getvalue(),
         mimetype="text/csv",
